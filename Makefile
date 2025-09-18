@@ -3,10 +3,6 @@ MAJOR = 5
 MINOR = 1
 RELEASE = 0
 
-# Path to LLVM
-LLVM_BIN_PATH := /home/pacheco/Applications/LLVM/llvm-project/build/bin/
-PATH := $(LLVM_BIN_PATH):$(PATH)
-
 # LLVM Toolchain
 LLVM_CC = clang
 LLVM_OPT = opt
@@ -14,63 +10,6 @@ LLC = llc
 LLVM_MC = llvm-mc
 LLVM_LD = clang
 LLVM_AR = llvm-ar
-
-# Target Architecture (adjust as needed)
-#TARGET_ARCH_LLC = arm
-#TARGET_ARCH_CC = arm-linux-gnueabihf
-
-#TARGET_ARCH_LLC = x86-64
-#TARGET_ARCH_CC = x86_64-linux-gnu
-
-#TARGET_ARCH_LLC = x86-64
-#TARGET_ARCH_CC = x86_64-x86_64-unknown-freebsd14.2
-
-TARGET_ARCH_LLC = aarch64
-TARGET_ARCH_CC = aarch64-linux-gnu
-
-#  Registered Targets:
-#    aarch64     - AArch64 (little endian)
-#    aarch64_32  - AArch64 (little endian ILP32)
-#    aarch64_be  - AArch64 (big endian)
-#    amdgcn      - AMD GCN GPUs
-#    arm         - ARM
-#    arm64       - ARM64 (little endian)
-#    arm64_32    - ARM64 (little endian ILP32)
-#    armeb       - ARM (big endian)
-#    avr         - Atmel AVR Microcontroller
-#    bpf         - BPF (host endian)
-#    bpfeb       - BPF (big endian)
-#    bpfel       - BPF (little endian)
-#    hexagon     - Hexagon
-#    lanai       - Lanai
-#    loongarch32 - 32-bit LoongArch
-#    loongarch64 - 64-bit LoongArch
-#    mips        - MIPS (32-bit big endian)
-#    mips64      - MIPS (64-bit big endian)
-#    mips64el    - MIPS (64-bit little endian)
-#    mipsel      - MIPS (32-bit little endian)
-#    msp430      - MSP430 [experimental]
-#    nvptx       - NVIDIA PTX 32-bit
-#    nvptx64     - NVIDIA PTX 64-bit
-#    ppc32       - PowerPC 32
-#    ppc32le     - PowerPC 32 LE
-#    ppc64       - PowerPC 64
-#    ppc64le     - PowerPC 64 LE
-#    r600        - AMD GPUs HD2XXX-HD6XXX
-#    riscv32     - 32-bit RISC-V
-#    riscv64     - 64-bit RISC-V
-#    sparc       - Sparc
-#    sparcel     - Sparc LE
-#    sparcv9     - Sparc V9
-#    systemz     - SystemZ
-#    thumb       - Thumb
-#    thumbeb     - Thumb (big endian)
-#    ve          - VE
-#    wasm32      - WebAssembly 32-bit
-#    wasm64      - WebAssembly 64-bit
-#    x86         - 32-bit X86: Pentium-Pro and above
-#    x86-64      - 64-bit X86: EM64T and AMD64
-#    xcore       - XCore
 
 # Flags
 CFLAGS = -I/usr/local/include -std=gnu99  # For c
@@ -100,6 +39,16 @@ TARGET1_A = $(BUILD_DIR)/lib$(TARGET1_NAME).a
 TARGET1_SO = $(BUILD_DIR)/lib$(TARGET1_NAME).so
 
 # --- Build Rules ---
+all: 
+	@echo "Creating the libraries for the following platforms:"
+	@echo "aarch64, x86-64, arm"
+	$(MAKE) clean
+	$(MAKE) release TARGET_ARCH_LLC=arm TARGET_ARCH_CC=arm-linux-gnueabihf TYPE=so CFLAGS+=-fPIC LLC_RELOCATION="-relocation-model=pic"
+	$(MAKE) clean
+	$(MAKE) release TARGET_ARCH_LLC=x86-64 TARGET_ARCH_CC=x86_64-linux-gnu TYPE=so CFLAGS+=-fPIC LLC_RELOCATION="-relocation-model=pic"
+	$(MAKE) clean
+	$(MAKE) release TARGET_ARCH_LLC=aarch64 TARGET_ARCH_CC=aarch64-linux-gnu TYPE=so CFLAGS+=-fPIC LLC_RELOCATION="-relocation-model=pic"
+
 # Create build directories
 $(BUILD_DIR) $(LLVM_IR_DIR) $(ASM_DIR):
 	@mkdir -p $@
@@ -116,9 +65,9 @@ $(LLVM_IR_DIR)/%.opt.ll: $(LLVM_IR_DIR)/%.ll
 	$(LLVM_OPT) $(OPT_FLAGS) $< -o $@
 
 # Compile LLVM IR (.ll) to Assembly (.s)
-$(ASM_DIR)/%.s: $(LLVM_IR_DIR)/%.ll | $(ASM_DIR)
+$(ASM_DIR)/%.s: $(LLVM_IR_DIR)/%.opt.ll | $(ASM_DIR)
 	@echo "Compiling LLVM IR $< to Assembly $@"
-	$(LLC) -march=$(TARGET_ARCH_LLC) $< -o $@
+	$(LLC) -march=$(TARGET_ARCH_LLC) $(LLC_RELOCATION) $< -o $@
 
 # Assemble Assembly (.s) to Object (.o)
 $(BUILD_DIR)/%.o: $(ASM_DIR)/%.s | $(BUILD_DIR)
@@ -144,13 +93,6 @@ documentation:
 	@cd ..
 	@echo "Documentation generated in $(DOC_DIR)"
 
-# Install the library TYPE is passed by argument
-install: $(BUILD_DIR)/lib$(TARGET1_NAME).$(TYPE)
-	@sudo cp include/$(TARGET1_NAME).h /usr/local/include/$(TARGET1_NAME).h
-	@sudo cp $(BUILD_DIR)/lib$(TARGET1_NAME).$(TYPE) /usr/lib/$(TARGET_ARCH_CC)/lib$(TARGET1_NAME).$(TYPE)
-	@sudo ldconfig
-	@echo "Done installing..."
-
 release: $(BUILD_DIR)/lib$(TARGET1_NAME).$(TYPE)
 	@mkdir -p release/lib$(TARGET1_NAME)-$(TARGET_ARCH_CC)
 	@cp include/$(TARGET1_NAME).h release/lib$(TARGET1_NAME)-$(TARGET_ARCH_CC)/$(TARGET1_NAME).h
@@ -159,12 +101,21 @@ release: $(BUILD_DIR)/lib$(TARGET1_NAME).$(TYPE)
 	@echo "Creating release installation bash..."
 	@echo   "#!/bin/bash" \
 			"\n" \
-			"\ncp $(TARGET1_NAME).h /usr/local/include/$(TARGET1_NAME).h" \
-			"\ncp lib$(TARGET1_NAME).$(TYPE) /usr/lib/$(TARGET_ARCH_CC)/lib$(TARGET1_NAME).$(TYPE)" \
+			"\necho \"0: Install\"" \
+			"\necho \"1: Uninstall\"" \
+			"\nread -p \">> \" choice" \
+			'\nif [ "$$choice" -eq 0 ]; then' \
+			"\n  echo \"Installing ...\"" \
+			"\n  cp $(TARGET1_NAME).h /usr/local/include/$(TARGET1_NAME).h" \
+			"\n  cp lib$(TARGET1_NAME).$(TYPE) /usr/lib/$(TARGET_ARCH_CC)/lib$(TARGET1_NAME).$(TYPE)" \
+			"\nelse" \
+			"\n  echo \"Uninstalling ...\"" \
+			"\n  rm /usr/lib/$(TARGET_ARCH_CC)/lib$(TARGET1_NAME).$(TYPE)" \
+			"\n  rm /usr/local/include/$(TARGET1_NAME).h" \
 			"\n" > ./release/lib$(TARGET1_NAME)-$(TARGET_ARCH_CC)/install.sh
+	@chmod u+x ./release/lib$(TARGET1_NAME)-$(TARGET_ARCH_CC)/install.sh
 	@echo "Zipping the release lib$(TARGET1_NAME)-$(TARGET_ARCH_CC).zip..."
 	@cd release && zip -r lib$(TARGET1_NAME)-$(TARGET_ARCH_CC).zip lib$(TARGET1_NAME)-$(TARGET_ARCH_CC) 
-
 
 # Uninstall the library TYPE is passed by argument
 uninstall:
@@ -172,16 +123,15 @@ uninstall:
 	@sudo rm /usr/lib/$(TARGET_ARCH_CC)/lib$(TARGET1_NAME).$(TYPE)
 	@sudo rm /usr/local/include/$(TARGET1_NAME).h
 
-# Default target to build all shared library
-#all: $(TARGET1_A)
-#	@echo "All targets built with LLVM workflow from $(LANG) files."
-
-# Clean rule to remove build artifacts
 clean:
-	@echo "Cleaning build directory..."
+	@echo "Cleaning build and documentation directories..."
 	@rm -rf $(DOCS_DIR)/html
 	@rm -rf $(DOCS_DIR)/man
 	@rm -rf $(BUILD_DIR)
 	@echo "Clean complete."
+
+cleanrelease:
+	@echo "Cleaning the release directory..."
+	@rm -rf release
 
 .PHONY: clean
