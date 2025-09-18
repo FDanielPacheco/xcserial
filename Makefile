@@ -117,12 +117,6 @@ release: $(BUILD_DIR)/lib$(TARGET1_NAME).$(TYPE)
 	@echo "Zipping the release lib$(TARGET1_NAME)-$(TARGET_ARCH_CC).zip..."
 	@cd release && zip -r lib$(TARGET1_NAME)-$(TARGET_ARCH_CC).zip lib$(TARGET1_NAME)-$(TARGET_ARCH_CC) 
 
-# Uninstall the library TYPE is passed by argument
-uninstall:
-	@echo "Unistalling library"
-	@sudo rm /usr/lib/$(TARGET_ARCH_CC)/lib$(TARGET1_NAME).$(TYPE)
-	@sudo rm /usr/local/include/$(TARGET1_NAME).h
-
 clean:
 	@echo "Cleaning build and documentation directories..."
 	@rm -rf $(DOCS_DIR)/html
