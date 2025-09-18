@@ -23,18 +23,23 @@ chmod u+x install.sh
 
 Build dynamic library (for all platforms):
 ```
-# Clone the repository
 git clone https://github.com/FDanielPacheco/xcserial.git
 cd xcserial
-
-# Build and install
 make
-./release/libxcserial-<platform>/install.sh 
 ```
 
-Build 
+Build and install dynamic or static library (for single platform):
+```
+make release TARGET_ARCH_LLC=<1> TARGET_ARCH_CC=<2> TYPE=<3> CF=-fPIC LF="-relocation-model=pic" LDF=""
+```
 
-`<type>`: "so" for dynamic library, "a" for static library.
-``
+`<1,2>`:
+- arm, arm-linux-gnueabihf
+- x86-64, x86_64-linux-gnu
+- aarch64, aarch64-linux-gnu
+ 
+`<3>`:
+- Dynamic: so
+- Static: a
 
 ## 
