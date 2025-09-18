@@ -57,3 +57,4 @@ dkms.conf
 build/
 docs/html
 docs/man
+release/

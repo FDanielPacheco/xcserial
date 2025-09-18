@@ -1,6 +1,6 @@
 # Version
-MAJOR = 5
-MINOR = 1
+MAJOR = 1
+MINOR = 0
 RELEASE = 0
 
 # LLVM Toolchain
