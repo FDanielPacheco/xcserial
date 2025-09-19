@@ -1,13 +1,6 @@
 # xcserial: Linux-based C serial port library.
 
-`xcserial` is a lightweight C library providing convenient wrappers for low-level, non-canonical serial port control and I/O on Linux systems.  
-It is designed for embedded and systems programming, offering fine-grained control over parameters such as baud rate, parity, stop bits, data bits, flow control, and timeouts.  
-
-The library supports both:
-- **Synchronous (blocking)** programming for simple, sequential use.
-- **Asynchronous (callback-driven)** programming for event-based applications.
-
-It can be configured to minimize hardware resource usage while keeping a clean and familiar programming style.
+`xcserial` is a lightweight C library providing convenient wrappers for low-level, non-canonical serial port control and I/O on Linux systems. It is designed for embedded and systems programming, offering fine-grained control over parameters such as baud rate, parity, stop bits, data bits, flow control, and timeouts. The library supports both synchronous (blocking) programming for simple, sequential use and asynchronous (callback-driven) programming for event-based applications.
 
 ---
 
