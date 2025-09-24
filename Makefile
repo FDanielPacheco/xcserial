@@ -12,13 +12,12 @@ LLVM_LD = clang
 LLVM_AR = llvm-ar
 
 # Flags
-CFLAGS = -I/usr/local/include -std=gnu99  # For c
-#CFLAGS = -I/usr/local/include -std=gnu++23 -fPIC # For cpp
+CFLAGS = -I/usr/local/include 
 CFLAGS += -Wall -Wextra -Wpedantic -Wshadow -Wconversion -g -Iinclude -Wno-gnu-zero-variadic-macro-arguments -O2
+ASM_FLAGS = $(CFLAGS)
 OPT_FLAGS = -O2
-ASM_FLAGS =
 LD_FLAGS = 
-LD_LIB += -lc -lpthread -lrt -lm # -lcheck_pic -lsubunit
+LD_LIB += -lc -lpthread -lrt -lm -ludev # -lcheck_pic -lsubunit
 
 # Source and build directories
 SRC_DIR = src
@@ -28,6 +27,11 @@ ASM_DIR = $(BUILD_DIR)/asm
 
 # Documentation
 DOCS_DIR = docs
+
+# Test 
+TEST_DIR = test
+TESTS = sync async
+TEST_BINS = $(addprefix $(BUILD_DIR)/, $(TESTS))
 
 # --- Target 1: xcserial ---
 TARGET1_NAME = xcserial
@@ -39,15 +43,26 @@ TARGET1_A = $(BUILD_DIR)/lib$(TARGET1_NAME).a
 TARGET1_SO = $(BUILD_DIR)/lib$(TARGET1_NAME).so
 
 # --- Build Rules ---
+single_so:
+	@echo "Creating the libraries for the host platform..."
+	$(MAKE) clean
+	$(MAKE) release TARGET_ARCH_LLC="" TARGET_ARCH_CC="" TYPE=so CF=-fPIC LF="-relocation-model=pic" LDF="" TARGET_INC=""
+
+single_a:
+	@echo "Creating the libraries for the host platform..."
+	$(MAKE) clean
+	$(MAKE) release TARGET_ARCH_LLC="" TARGET_ARCH_CC="" TYPE=a CF=-fPIC LF="-relocation-model=pic" LDF="" TARGET_INC=""
+
+
 all: 
 	@echo "Creating the libraries for the following platforms:"
 	@echo "aarch64, x86-64, arm"
 	$(MAKE) clean
-	$(MAKE) release TARGET_ARCH_LLC=arm TARGET_ARCH_CC=arm-linux-gnueabihf TYPE=so CFLAGS+=-fPIC LLC_RELOCATION="-relocation-model=pic"
+	$(MAKE) release TARGET_ARCH_LLC=arm TARGET_ARCH_CC=arm-linux-gnueabihf TYPE=so CF=-fPIC LF="-relocation-model=pic" LDF="" TARGET_INC="--target="
 	$(MAKE) clean
-	$(MAKE) release TARGET_ARCH_LLC=x86-64 TARGET_ARCH_CC=x86_64-linux-gnu TYPE=so CFLAGS+=-fPIC LLC_RELOCATION="-relocation-model=pic"
+	$(MAKE) release TARGET_ARCH_LLC=x86-64 TARGET_ARCH_CC=x86_64-linux-gnu TYPE=so CF=-fPIC LF="-relocation-model=pic" LDF="" TARGET_INC="--target="
 	$(MAKE) clean
-	$(MAKE) release TARGET_ARCH_LLC=aarch64 TARGET_ARCH_CC=aarch64-linux-gnu TYPE=so CFLAGS+=-fPIC LLC_RELOCATION="-relocation-model=pic"
+	$(MAKE) release TARGET_ARCH_LLC=aarch64 TARGET_ARCH_CC=aarch64-linux-gnu TYPE=so CF+=-fPIC LF="-relocation-model=pic" LDF="" TARGET_INC="--target="
 
 # Create build directories
 $(BUILD_DIR) $(LLVM_IR_DIR) $(ASM_DIR):
@@ -57,7 +72,7 @@ $(BUILD_DIR) $(LLVM_IR_DIR) $(ASM_DIR):
 # Compile .c or .cpp to LLVM IR (.ll)
 $(LLVM_IR_DIR)/%.ll: $(SRC_DIR)/%.c | $(LLVM_IR_DIR)
 	@echo "Compiling $< to LLVM IR $@"
-	$(LLVM_CC) $(CFLAGS) -S -emit-llvm --target=$(TARGET_ARCH_CC) $< -o $@
+	$(LLVM_CC) -std=gnu99 $(CFLAGS) $(CF) -S -emit-llvm $(TARGET_INC)$(TARGET_ARCH_CC) $< -o $@
 
 # Optimize LLVM IR (optional)
 $(LLVM_IR_DIR)/%.opt.ll: $(LLVM_IR_DIR)/%.ll
@@ -67,12 +82,12 @@ $(LLVM_IR_DIR)/%.opt.ll: $(LLVM_IR_DIR)/%.ll
 # Compile LLVM IR (.ll) to Assembly (.s)
 $(ASM_DIR)/%.s: $(LLVM_IR_DIR)/%.opt.ll | $(ASM_DIR)
 	@echo "Compiling LLVM IR $< to Assembly $@"
-	$(LLC) -march=$(TARGET_ARCH_LLC) $(LLC_RELOCATION) $< -o $@
+	$(LLC) -march=$(TARGET_ARCH_LLC) $(LF) $< -o $@
 
 # Assemble Assembly (.s) to Object (.o)
 $(BUILD_DIR)/%.o: $(ASM_DIR)/%.s | $(BUILD_DIR)
 	@echo "Assembling $< to Object $@"
-	$(LLVM_LD) $(CFLAGS) --target=$(TARGET_ARCH_CC) -c $< -o $@
+	$(LLVM_LD) $(ASM_FLAGS) $(CF) $(TARGET_INC)$(TARGET_ARCH_CC) -c $< -o $@
 
 # Create the static library (.a)
 $(TARGET1_A): $(TARGET1_OBJ)
@@ -83,7 +98,7 @@ $(TARGET1_A): $(TARGET1_OBJ)
 # Create the dynamic library (.a)
 $(TARGET1_SO): $(TARGET1_OBJ)
 	@echo "Creating dynamic library $(TARGET1_NAME)..."
-	$(LLVM_CC) -shared --target=$(TARGET_ARCH_CC) -o $@ $< $(LD_FLAGS) $(LD_LIB)
+	$(LLVM_CC) -shared $(TARGET_INC)$(TARGET_ARCH_CC) -o $@ $< $(LD_FLAGS) $(LD_LIB) $(LDF)
 	@echo "Built dynamic library: $@"
 
 # Generate the documentation
@@ -127,5 +142,12 @@ clean:
 cleanrelease:
 	@echo "Cleaning the release directory..."
 	@rm -rf release
+	
+$(TESTS): %: single_a $(BUILD_DIR)/%
 
+$(BUILD_DIR)/%: $(TEST_DIR)/%.c | $(BUILD_DIR)
+	@echo "Compiling $< to test binary $@..."
+	$(LLVM_CC) -std=gnu99 $(CFLAGS) $< -o $@ -L$(BUILD_DIR) -l$(TARGET1_NAME) $(LD_LIB)
+
+# 
 .PHONY: clean
