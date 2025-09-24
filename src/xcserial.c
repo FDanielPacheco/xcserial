@@ -328,7 +328,6 @@ serial_set_udev_id( const serial_id_t * id, serial_t * serial ){
     errno = EINVAL;
     return -1;
   }
-
   memcpy( &(serial->id), id, sizeof(serial_id_t) );
   return 0;
 }

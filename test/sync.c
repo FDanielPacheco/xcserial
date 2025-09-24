@@ -140,11 +140,11 @@ main( void ){
   serial_set_line_state( SERIAL_DTR, 1, &serial );
   usleep( 2e6 );
    
-  const char field[ ] = "ID_USB_INTERFACES";
-  printf("ID_USB_INTERFACES: %s\n", serial_get_udev_param_value( field, strlen(field), &serial ) );
+  const char field[ ] = "ID_MODEL_FROM_DATABASE";
+  printf("%s: %s\n", field, serial_get_udev_param_value( field, strlen(field), &serial ) );
 
   int test_id = 1;
-  printf("Result %d: %s\n", test_id, test( &serial, 2000, 0, "UTEST:WRITE\n", "UTEST:OK:WRITE", test_id, 1 ) ? "Passed" : "Failed" );
+  printf("Result %d: %s\n", test_id, test( &serial, 100, 0, "UTEST:WRITE\n", "UTEST:OK:WRITE", test_id, 1 ) ? "Passed" : "Failed" );
   printf("\n------------------------\n" );
 
   test_id = 2;
@@ -152,7 +152,7 @@ main( void ){
   printf("\n------------------------\n" );
 
   test_id = 3;
-  printf("Result %d: %s\n", test_id, test( &serial, 2000, 0, "UTEST:WRITE\n", "UTEST:OK:WRITE", test_id, 1 ) ? "Passed" : "Failed" );
+  printf("Result %d: %s\n", test_id, test( &serial, 3000, 0, "UTEST:WRITE\n", "UTEST:OK:WRITE", test_id, 1 ) ? "Passed" : "Failed" );
   printf("\n------------------------\n" );
 
   test_id = 4;
