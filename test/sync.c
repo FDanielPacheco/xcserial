@@ -166,7 +166,7 @@ main( void ){
   test_id = 6;
   printf("Result %d: %s\n", test_id, test( &serial, 0, 30, "UTEST:WRITE_LF\n", "UTEST:OK:WRITE_LF\n", test_id, 0 ) ? "Passed" : "Failed" );
   printf("\n------------------------\n" );
-  
+
   serial_close( &serial );
   return 0;   
 }

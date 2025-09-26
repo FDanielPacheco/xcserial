@@ -1674,7 +1674,7 @@ serial_async_set_callback( serial_read_callback_t handler_read, serial_disconnec
   serial->async.close = 0;
 
   pthread_attr_t * attr = NULL;
-  if( !pthread_create( &(serial->async.thread), attr, async_epoll_thread, serial ) )
+  if( 0 != pthread_create( &(serial->async.thread), attr, async_epoll_thread, serial ) )
     return -1;
   
   return 0;
@@ -1693,24 +1693,22 @@ async_epoll_thread( void * arg ){
   for( ; ; ){
     if( serial->async.close )
       break;
-
+    
     size_t len = serial_read( (char *) buf, sizeof(buf), 0, sizeof(buf)-1, serial );    
-    if( 0 < len )
-      serial->async.rcb( buf, len );
 
     if( !len ){
-      switch( errno ){
-        case EIO:
-        case ENODEV:
-        case EBADF:
-        case EPOLLHUP:
-        case EINVAL:
-          serial->async.dcb( );
-        
-        default:
-          break;
+      if( (errno == ENODEV) || (errno == EIO) ){        
+        printf("Device got disconnected (%d)%s...\n", serial->fd, serial->pathname );
+
+        serial->async.close = 1;
+        if( -1 == serial->async.dcb( ) )
+          return NULL;
+        serial->async.close = 0;
       }
+      continue;
     }
+
+    serial->async.rcb( buf, len );
   }    
 
   return NULL;

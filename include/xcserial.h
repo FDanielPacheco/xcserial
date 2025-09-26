@@ -101,8 +101,8 @@ typedef enum {
 
 typedef speed_t baudrate_t;                                                    //!< Type used by the termios API.
 
-typedef void (*serial_read_callback_t)( uint8_t *, size_t );
-typedef void (*serial_disconnect_callback_t)( void );
+typedef void   (*serial_read_callback_t)( uint8_t *, size_t );
+typedef int8_t (*serial_disconnect_callback_t)( void );
 
 /***************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************
  * Structs
