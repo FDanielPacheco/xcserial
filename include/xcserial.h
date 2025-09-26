@@ -61,30 +61,30 @@ extern "C" {
 
 //!< The options available for the flow control on the serial communication.
 typedef enum {
-  FLOWCONTROL_NONE,                                                            //!< No flow control is used.
-  FLOWCONTROL_HARDWARE,                                                        //!< Hardware flow control is used.
-  FLOWCONTROL_SOFTWARE,                                                        //!< Software flow control is used.
+  FLOWCONTROL_NONE,                                                           //!< No flow control is used.
+  FLOWCONTROL_HARDWARE,                                                       //!< Hardware flow control is used.
+  FLOWCONTROL_SOFTWARE,                                                       //!< Software flow control is used.
 } flow_control_t;
 
 //!< The options available for the parity mode on the serial communication.
 typedef enum {
-  BPARITY_NONE,                                                                 //!< No parity bit is used.
-  BPARITY_ODD,                                                                  //!< Parity bit used and it checks for odd.
-  BPARITY_EVEN,                                                                 //!< Parity bit used and it checks for even.
+  BPARITY_NONE,                                                                //!< No parity bit is used.
+  BPARITY_ODD,                                                                 //!< Parity bit used and it checks for odd.
+  BPARITY_EVEN,                                                                //!< Parity bit used and it checks for even.
 } parity_t;
 
 //!< The options available for the number of data bits used on the serial communication.
 typedef enum {
-  DATA_BITS_5 = CS5,                                                           //!< 5 Data bits that compose the content of a serial frame
-  DATA_BITS_6 = CS6,                                                           //!< 6 Data bits that compose the content of a serial frame
-  DATA_BITS_7 = CS7,                                                           //!< 7 Data bits that compose the content of a serial frame
-  DATA_BITS_8 = CS8,                                                           //!< 8 Data bits that compose the content of a serial frame
+  DATA_BITS_5 = CS5,                                                          //!< 5 Data bits that compose the content of a serial frame
+  DATA_BITS_6 = CS6,                                                          //!< 6 Data bits that compose the content of a serial frame
+  DATA_BITS_7 = CS7,                                                          //!< 7 Data bits that compose the content of a serial frame
+  DATA_BITS_8 = CS8,                                                          //!< 8 Data bits that compose the content of a serial frame
 } data_bits_t;
 
 //!< The options available for the number of stop bits used  on the serial communication.
 typedef enum {
-  STOP_BITS_1,                                                                 //!< 1 Stop bit after each N data bits
-  STOP_BITS_2,                                                                 //!< 2 Stop bits after each N data bits
+  STOP_BITS_1,                                                                //!< 1 Stop bit after each N data bits
+  STOP_BITS_2,                                                                //!< 2 Stop bits after each N data bits
 } stop_bits_t;
 
 //!< The options available for the real/virtual lines present on the serial communication.
@@ -101,8 +101,8 @@ typedef enum {
 
 typedef speed_t baudrate_t;                                                    //!< Type used by the termios API.
 
-typedef void   (*serial_read_callback_t)( uint8_t *, size_t );
-typedef int8_t (*serial_disconnect_callback_t)( void );
+typedef void   (*serial_read_callback_t)( uint8_t *, size_t );                 //!< The read async callback function definition
+typedef int8_t (*serial_disconnect_callback_t)( void );                        //!< The disconnect async callback function definition
 
 /***************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************
  * Structs
@@ -110,27 +110,27 @@ typedef int8_t (*serial_disconnect_callback_t)( void );
 
 //!< The serial port configuration data structure. Can be used to configure the serial port running configuration. 
 typedef struct {
-  baudrate_t      baudrate;                                                   //!< The baud rate of the communication in bits per second, example B9600.
-  flow_control_t  flow_control;                                               //!< The hardware flow control, example FLOWCONTROL_HARDWARE.
-  parity_t        parity;                                                     //!< The detection of error parity, example PARITY_ODD.
-  data_bits_t     data_bits;                                                  //!< The number of bits per serial word, example DATA_BITS_8.
-  stop_bits_t     stop_bits;                                                  //!< The number of stop bits per serial word, example STOP_BITS_1.
-  uint8_t         timeout_ds;                                                 //!< The time any read function will wait in deciseconds for the information to arrive, example 200.
-  int             event_timeout_ms;                                           //!< The timeout for waiting for a event
-  uint8_t         min_bytes;                                                  //!< The minimum number of bytes to necessary receive before returning the read function.
-  uint8_t         readonly:1;                                                 //!< If the file pointer will be given in read only mode, example false = r+.
+  baudrate_t      baudrate;                                                    //!< The baud rate of the communication in bits per second, example B9600.
+  flow_control_t  flow_control;                                                //!< The hardware flow control, example FLOWCONTROL_HARDWARE.
+  parity_t        parity;                                                      //!< The detection of error parity, example PARITY_ODD.
+  data_bits_t     data_bits;                                                   //!< The number of bits per serial word, example DATA_BITS_8.
+  stop_bits_t     stop_bits;                                                   //!< The number of stop bits per serial word, example STOP_BITS_1.
+  uint8_t         timeout_ds;                                                  //!< The time any read function will wait in deciseconds for the information to arrive, example 200.
+  int             event_timeout_ms;                                            //!< The timeout for waiting for a event
+  uint8_t         min_bytes;                                                   //!< The minimum number of bytes to necessary receive before returning the read function.
+  uint8_t         readonly:1;                                                  //!< If the file pointer will be given in read only mode, example false = r+.
 } serial_config_t;
 
 typedef struct{
-  char field[NAME_MAX];
-  char value[NAME_MAX];
+  char field[NAME_MAX];                                                        //!< The udevadm serial port field    
+  char value[NAME_MAX];                                                        //!< The udevadm serial port field value    
 } serial_udev_paramater_t;
 
 //!< The serial identification used if the device is disconnected
 typedef struct{
-  char bus[NAME_MAX];
-  serial_udev_paramater_t dev[16];
-  uint8_t ndev;
+  char bus[NAME_MAX];                                                          //!< The type of serial port e.g., usb.
+  serial_udev_paramater_t dev[16];                                             //!< A list of udevadm fields .
+  uint8_t ndev;                                                                //!< The number of fields used on the list `dev`.
 } serial_id_t;
 
 //!< The async manager of the serial port, used for asnyc reads, hot-plug disconnect and other features
@@ -169,7 +169,7 @@ typedef struct{
  * @param[in]  pathname The absolute path for the device file, example `/dev/ttyUSB0`
  * @param[in]  readonly The permission of the file descriptor associated with the serial port, 0 is read/write and 1 is read only. 
  * @param[in]  config The serial port configuration data structure (`serial_config_t`), this configuration must have been updated with the user's desired information, can be nullable if the user desire the default configuration present in `serial_default_config`. 
- * @param[in]  id Indication of the udevam parameters that identify this serial port, used for reconnection upon disconnection.
+ * @param[in]  id Indication of the udevadm parameters that identify this serial port, used for reconnection upon disconnection.
  * 
  * @return Upon success, performing the process of opening the serial port, it returns 0 and the serial struct filled. \n
  *         Otherwise, -1 is returned and `errno` is set to indicate the error.
@@ -863,7 +863,7 @@ int8_t serial_async_set_callback( serial_read_callback_t handler_read, serial_di
 int8_t serial_get_udev_devs_list( char devs[ ][PATH_MAX], uint8_t size, size_t length, uint8_t * ndevs );
 
 /**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************//**
- * @brief Sets a list of udevam field to associate with serial port opened.
+ * @brief Sets a list of udevadm field to associate with serial port opened.
  *
  * @param[in] params A list of parameters to look for, check udevadm info /dev/tty____.
  * @param[in] nparams The number of the parameter to fill, number of items in param.
@@ -877,7 +877,7 @@ int8_t serial_get_udev_devs_list( char devs[ ][PATH_MAX], uint8_t size, size_t l
 int8_t serial_set_udev_param_list( const char params[][NAME_MAX], uint8_t nparams, size_t length, serial_t * serial );
 
 /**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************//**
- * @brief Sets the an udevam field to associate with serial port opened.
+ * @brief Sets the an udevadm field to associate with serial port opened.
  *
  * @param[in] field A parameter to look for, check udevadm info /dev/tty____.
  * @param[in] length The length of `field`.
@@ -890,7 +890,7 @@ int8_t serial_set_udev_param_list( const char params[][NAME_MAX], uint8_t nparam
 int8_t serial_set_udev_param_field( const char * field, size_t length, serial_t * serial );
 
 /**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************//**
- * @brief Gets the udevam value associated with the field specified on the serial port used.
+ * @brief Gets the udevadm value associated with the field specified on the serial port used.
  *
  * @param[in] field A parameter to look for, check udevadm info /dev/tty____.
  * @param[in] length The length of `field`.
