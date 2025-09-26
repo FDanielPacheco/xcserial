@@ -58,3 +58,4 @@ build/
 docs/html
 docs/man
 release/
+.vscode/
