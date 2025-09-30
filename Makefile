@@ -15,9 +15,9 @@ LLVM_AR = llvm-ar
 CFLAGS = -I/usr/local/include 
 CFLAGS += -Wall -Wextra -Wpedantic -Wshadow -Wconversion -g -Iinclude -Wno-gnu-zero-variadic-macro-arguments -O2
 ASM_FLAGS = $(CFLAGS)
-OPT_FLAGS = -O2
+OPT_FLAGS = -O2 -strip-debug
 LD_FLAGS = 
-LD_LIB += -lc -lpthread -lrt -lm -ludev # -lcheck_pic -lsubunit
+LD_LIB += -lc -lpthread -ludev # -lcheck_pic -lsubunit
 
 # Source and build directories
 SRC_DIR = src
@@ -116,17 +116,26 @@ release: $(BUILD_DIR)/lib$(TARGET1_NAME).$(TYPE)
 	@echo "Creating release installation bash..."
 	@echo   "#!/bin/bash" \
 			"\n" \
+			'\nif [ "$$EUID" -ne 0 ]; then' \
+			"\n  echo \"Error: Please run this script with sudo.\"" \
+			"\n  exit 1" \
+			"\nfi" \
 			"\necho \"0: Install\"" \
 			"\necho \"1: Uninstall\"" \
 			"\nread -p \">> \" choice" \
 			'\nif [ "$$choice" -eq 0 ]; then' \
-			"\n  echo \"Installing ...\"" \
+			"\n  echo \"Installing to /usr/local/...\"" \
 			"\n  cp $(TARGET1_NAME).h /usr/local/include/$(TARGET1_NAME).h" \
 			"\n  cp lib$(TARGET1_NAME).$(TYPE) /usr/lib/$(TARGET_ARCH_CC)/lib$(TARGET1_NAME).$(TYPE)" \
+			"\n  ldconfig" \
+			"\n  echo \"Installation complete.\"" \
 			"\nelse" \
-			"\n  echo \"Uninstalling ...\"" \
+			"\n  echo \"Uninstalling from /usr/local/...\"" \
 			"\n  rm /usr/lib/$(TARGET_ARCH_CC)/lib$(TARGET1_NAME).$(TYPE)" \
 			"\n  rm /usr/local/include/$(TARGET1_NAME).h" \
+			"\n  ldconfig" \
+			"\n  echo \"Uninstallation complete.\"" \
+			"\nfi" \
 			"\n" > ./release/lib$(TARGET1_NAME)-$(TARGET_ARCH_CC)/install.sh
 	@chmod u+x ./release/lib$(TARGET1_NAME)-$(TARGET_ARCH_CC)/install.sh
 	@echo "Zipping the release lib$(TARGET1_NAME)-$(TARGET_ARCH_CC).zip..."
