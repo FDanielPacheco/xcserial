@@ -170,6 +170,7 @@ typedef struct{
  * @param[in]  readonly The permission of the file descriptor associated with the serial port, 0 is read/write and 1 is read only. 
  * @param[in]  config The serial port configuration data structure (`serial_config_t`), this configuration must have been updated with the user's desired information, can be nullable if the user desire the default configuration present in `serial_default_config`. 
  * @param[in]  id Indication of the udevadm parameters that identify this serial port, used for reconnection upon disconnection.
+ * @param[in]  async The callback functions specified by `serial_async_t`.
  * 
  * @return Upon success, performing the process of opening the serial port, it returns 0 and the serial struct filled. \n
  *         Otherwise, -1 is returned and `errno` is set to indicate the error.
