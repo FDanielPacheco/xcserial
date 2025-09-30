@@ -1,17 +1,34 @@
 # xcserial: Linux-based C serial port library.
 
-`xcserial` is a lightweight C library providing convenient wrappers for low-level, non-canonical serial port control and I/O on Linux systems. It is designed for embedded and systems programming, offering fine-grained control over parameters such as baud rate, parity, stop bits, data bits, flow control, and timeouts. The library supports both synchronous (blocking) programming for simple, sequential use and asynchronous (callback-driven) programming for event-based applications.
+`xcserial` xcserial is a lightweight, user-space C library that abstracts low-level serial port I/O control on Linux. It offers comprehensive configuration of baud rate, parity, flow control, and millisecond-level timeouts. The architecture supports two distinct operating modes:
+
+- Synchronous: Utilizes the epoll system call for efficient, resource-sparing blocking I/O with precise response latency.
+- Asynchronous: Implements a multithreaded, callback-driven mechanism ideal for event-based applications.
+  
+A core capability is device resilience, enabling automatic port reopening by matching specified udevadm device fields upon physical disconnection.
+The library's stability and performance have been validated through its continuous deployment over one year within two scientific prototypes for autonomous underwater and mobile robotics.
 
 ---
 
 ## Installation
 
+### Library Requirements
+
+- C Standard Library (lc)
+- POSIX Threads Library (lpthread)
+- libudev (ludev)
+
+In Debian-based Linux:
+```bash
+sudo apt install build-essential libudev-dev
+```
+
 ### Prebuilt binaries
 
 Available platforms:
-- `aarch64-linux-gnu`
-- `arm-linux-gnueabihf` (e.g. Raspberry Pi)
 - `x86_64-linux-gnu` (Intel/AMD)
+- `arm-linux-gnueabihf` (e.g. Raspberry Pi 32-bit CPU)
+- `aarch64-linux-gnu` (e.g. Raspberry Pi 64-bit CPU)
 
 ```bash
 # Download and extract pre-compiled library
@@ -25,6 +42,16 @@ chmod u+x install.sh
 
 ### Build from source
 
+Build Requirements:
+- clang: Compiler frontend and Linker
+- opt: Optimizer
+- llc: Compiler backend
+- llvm-ar: Build static library 
+
+```bash
+sudo apt install llvm clang
+```
+
 Clone the repository:
 ```bash
 git clone https://github.com/FDanielPacheco/xcserial.git
@@ -32,17 +59,17 @@ cd xcserial
 ```
 
 Build the dynamic library for the host platform:
-```
+```bash
 make
 ```
 
-Build the dynamic library for all platforms available:
-```
+Build the dynamic library for all platforms listed above:
+```bash
 make all
 ```
 
-Build for a specific target and type:
-```
+Build for a specific target and type independent on the host platform (require the dynamic/static libraries for that platform):
+```bash
 make release TARGET_ARCH_LLC=<arch> TARGET_ARCH_CC=<triplet> TYPE=<so|a> CF=-fPIC LF="-relocation-model=pic"
 ```
 
@@ -55,92 +82,117 @@ make release TARGET_ARCH_LLC=<arch> TARGET_ARCH_CC=<triplet> TYPE=<so|a> CF=-fPI
 
 ## Usage Example 
 
-Synchronous example
-```
+### Synchronous (Blocking) Mode
+```c
 #include <xcserial.h>
+#include <stdio.h>
 
-int
-main( void ){
+int main( void ) {
   const char port[] = "/dev/ttyUSB0";
-  const uint8_t readonly = 0; // read/write enable  
   serial_t serial;
 
-  // Open serial port
-  if( -1 == serial_open( &serial, port, readonly, NULL ) )
-    exit( EXIT_FAILURE );
+  // Open port. Last three NULLs are for port configurations, udev params and async callbacks.
+  if( -1 == serial_open( &serial, port, 0, NULL, NULL, NULL ) )
+    return EXIT_FAILURE;
 
-  // Change the baudrate, and add a timeout for read functions
-  const baudrate_t baudrate = B115200; 
-  serial_set_baudrate( baudrate, &serial );
-  const timeout_ms = 10;
-  serial_set_timeout( timeout_ms, &serial );
+  // Set configuration
+  serial_set_baudrate( B115200, &serial );
+  serial_set_timeout( 10, &serial ); // 10ms read timeout
 
-  // Print configuration
-  const uint8_t output = 1; // print to the stdout
-  char text[32]; snprintf( text, sizeof(text), "[%d]", getpid( ) );
-  (void) serial_print_config( output, text, &serial );
+  // Print configuration to stdout
+  char text[32]; 
+  snprintf( text, sizeof(text), "[PID:%d]", getpid() );
+  serial_print_config( 1, text, &serial );
 
   // Write formatted string
-  size_t len = serial_writef( &serial, "Message:%d,%.2f\n", var1, var2 );
-  if( !len ){
-    serial_close( &serial );
-    exit( EXIT_FAILURE );  
-  }
+  int var1 = 123;
+  float var2 = 45.67f;
+  serial_writef( &serial, "Message:%d,%.2f\n", var1, var2 );
 
   // Read a chunk of bytes
-  uint8_t buf[ BUF_SIZE ];
-  size_t offset = 0;  // offset in the buf array
-  len = serial_read( buf, sizeof(buf), offset, &serial ); 
+  uint8_t buf[ BUFSIZ ];
+  size_t len = serial_read( buf, sizeof(buf), 0, &serial ); 
   
   // Close the serial port
   serial_close( &serial );
-  return 0;   
+  return 0;  
 }
 ```
 
-Asynchronous example
-```
+### Asynchronous (Callback) Mode
+This mode runs the I/O loop in the background, executing callbacks when data is received or the device is disconnected.
+```c
 #include <xcserial.h>
+#include <stdio.h>
 
-uint8_t buf[ BUF_SIZE ];
-size_t buf_len = 0; 
+uint8_t receive_buffer[ BUFSIZ ];
+size_t buffer_length = 0; 
 
-void
-read_ck( const uint8_t * data, const size_t len ){
-  // Check if there is available space
-  if( BUF_SIZE - buf_len > len ){
-    memcpy( buf, data, len );
-    buf_len += len;
-  }  
+// 1. Data Reception Callback
+void read_callback( const uint8_t * data, const size_t len ) {
+  // Check available space and copy data
+  if( BUFSIZ > buffer_length + len ){
+    memcpy( &receive_buffer[buffer_length], data, len );
+    buffer_length += len;
+  } 
 }
 
-int
-main( void ){
-  const char port[] = "/dev/ttyUSB0";
-  const uint8_t readonly = 0; // read/write enable  
+// 2. Disconnection Callback
+int8_t disconnect_callback( void ) {
+  // Logic to run when the device is physically disconnected
+  printf("Device disconnected! Waiting for hotplug...\n");
+  // ...
+}
+
+int main( void ) {
+  // ... serial_open( ... )
   serial_t serial;
+  // ... open and set params ...
 
-  // Open serial port
-  if( -1 == serial_open( &serial, port, readonly, NULL ) )
-    exit( EXIT_FAILURE );
+  // Set the callback functions
+  serial_async_set_callback( read_callback, disconnect_callback, &serial );
 
-  // Change the baudrate, and add a callback for read functions
-  const baudrate_t baudrate = B115200; 
-  serial_set_baudrate( baudrate, &serial );
-  serial_set_callback( read_ck, &serial );
-
-  // Infinite loop
+  // Infinite loop in the main thread (I/O runs in a separate thread)
   for( ; ; ){
-    if( !strcmp( buf, "Specific pattern" ) )
-      // process data
-    // doing something that requires CPU
+    // Main thread is free to do CPU-intensive work or check flags
+    if( buffer_length > 0 && !strcmp( (char*)receive_buffer, "PATTERN" ) ){
+        // Process received data
+    }
   }
+}
+```
+
+### Hotplug Reopen Feature
+Specify a list of udevadm fields to uniquely identify the device. If the port is lost, serial_reopen will monitor for a device matching those fields.
+```c
+int main( void ){
+  serial_t serial;
+  // ... open and set params ...
+
+  // 1. Define the udevadm fields for tracking
+  const char params[][NAME_MAX] = {
+    "ID_MODEL",
+    "ID_USB_VENDOR",
+    "ID_SERIAL_SHORT"
+  };
+  serial_set_udev_param_list( params, 3, NAME_MAX, &serial );
+
+  // ... main application logic ...
+
+  // 2. Call this after a device loss is detected or in the disc_ck( ) callback
+  uint16_t retry_attempts = 100; 
+  if( -1 == serial_reopen( &serial, retry_attempts ) ){
+    serial_close( &serial );
+    return EXIT_FAILURE;
+  }
+  // ... continue program execution ...
+}
 ```
 
 ## Documentation
 
 API documentation generation (from xcserial directory):
-```
+```bash
 make documentation
 ```
 Manual pages: `man docs/man/man3/xcserial.c.3` or `man docs/man/man3/xcserial.h.3` \
