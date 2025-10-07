@@ -119,7 +119,7 @@ main( void ){
   const char  *    pathname = "/dev/ttyACM0";
   const uint8_t    readonly = 0;
   const baudrate_t baudrate = B19200; 
-  serial_t serial;
+  serial_t serial; 
 
   const char params[ N_PARAMS ][NAME_MAX] = {
     "ID_MODEL",
