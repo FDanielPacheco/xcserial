@@ -17,7 +17,7 @@ CFLAGS += -Wall -Wextra -Wpedantic -Wshadow -Wconversion -g -Iinclude -Wno-gnu-z
 ASM_FLAGS = $(CFLAGS)
 OPT_FLAGS = -O2 -strip-debug
 LD_FLAGS = 
-LD_LIB += -lc -lpthread -ludev # -lcheck_pic -lsubunit
+LD_LIB += -lc -lpthread -ludev
 
 # Source and build directories
 SRC_DIR = src
@@ -41,6 +41,11 @@ TARGET1_S = $(ASM_DIR)/$(TARGET1_NAME).s
 TARGET1_OBJ = $(BUILD_DIR)/$(TARGET1_NAME).o
 TARGET1_A = $(BUILD_DIR)/lib$(TARGET1_NAME).a
 TARGET1_SO = $(BUILD_DIR)/lib$(TARGET1_NAME).so
+
+# --- Documentation arguments ---
+PROJECT_NAME = $(TARGET1_NAME)
+PROJECT_NAME_BRIEF = "A C serial port library for Linux (lib$(PROJECT_NAME))"
+PROJECT_BRIEF = "$(PROJECT_NAME) is a lightweight C wrapper library for interfacing with non-canonical serial port devices. Supports synchronous and asynchronous communication, as well as automatic hotplug detection and reconnection."
 
 # --- Build Rules ---
 single_so:
@@ -104,8 +109,12 @@ $(TARGET1_SO): $(TARGET1_OBJ)
 # Generate the documentation
 documentation:
 	@echo "Generating documentation..."
-	@cd docs && doxygen Doxyfile "PREDEFINED=PROJECT_VERSION=$(MAJOR).$(MINOR).$(RELEASE)"
-	@cd ..
+	@cp docs/Doxyfile docs/Doxyfile.tmp
+	@sed -i 's|^PROJECT_NAME.*|PROJECT_NAME = $(PROJECT_NAME)|' docs/Doxyfile.tmp
+	@sed -i 's|^PROJECT_NAME_BRIEF.*|PROJECT_NAME_BRIEF = $(PROJECT_NAME_BRIEF)|' docs/Doxyfile.tmp
+	@sed -i 's|^PROJECT_BRIEF.*|PROJECT_BRIEF = $(PROJECT_BRIEF)|' docs/Doxyfile.tmp
+	@sed -i 's|^PROJECT_NUMBER.*|PROJECT_NUMBER = $(MAJOR).$(MINOR).$(RELEASE)|' docs/Doxyfile.tmp
+	@doxygen docs/Doxyfile.tmp
 	@echo "Documentation generated in $(DOC_DIR)"
 
 release: $(BUILD_DIR)/lib$(TARGET1_NAME).$(TYPE)
@@ -145,6 +154,7 @@ clean:
 	@echo "Cleaning build and documentation directories..."
 	@rm -rf $(DOCS_DIR)/html
 	@rm -rf $(DOCS_DIR)/man
+	@rm -rf $(DOCS_DIR)/Doxyfile.tmp
 	@rm -rf $(BUILD_DIR)
 	@echo "Clean complete."
 
@@ -152,6 +162,9 @@ cleanrelease:
 	@echo "Cleaning the release directory..."
 	@rm -rf release
 	
+example: single_a
+	$(MAKE) $(TESTS)
+
 $(TESTS): %: single_a $(BUILD_DIR)/%
 
 $(BUILD_DIR)/%: $(TEST_DIR)/%.c | $(BUILD_DIR)
