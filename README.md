@@ -80,6 +80,7 @@ make release TARGET_ARCH_LLC=<arch> TARGET_ARCH_CC=<triplet> TYPE=<so|a> CF=-fPI
  
 `<TYPE>`: Dynamic: so | Static: a
 
+---
 ## Usage Example 
 
 ### Synchronous (Blocking) Mode
@@ -203,6 +204,7 @@ Additional:
 - [ERRNO Table](https://man7.org/linux/man-pages/man3/errno.3.html)
 - [Serial Lines Table](https://man7.org/linux/man-pages/man2/TIOCMSET.2const.html)
 
+---
 ## Author
 
 Fábio D. Pacheco \
