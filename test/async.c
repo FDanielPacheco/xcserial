@@ -13,7 +13,14 @@ char buf[BUFSIZ];
 size_t buflen = 0;
 uint8_t flexit = 0;
 uint8_t flfail = 0;
-uint8_t first = 1;
+
+void
+reset_device( void ){
+  serial_set_line_state( SERIAL_DTR, 0, &serial );
+  usleep( 1e3 );
+  serial_set_line_state( SERIAL_DTR, 1, &serial );
+  usleep( 2e6 );
+}
 
 void 
 handler_read( uint8_t * data, size_t len ){
@@ -30,13 +37,8 @@ handler_disconnect( void ){
   if( -1 == r )
     flexit = 1;
   else{
-    serial_set_line_state( SERIAL_DTR, 0, &serial );
-    usleep( 1e3 );
-    serial_set_line_state( SERIAL_DTR, 1, &serial );
-    usleep( 2e6 );
-    
+    reset_device( );    
     flfail = 0;
-    first = 1;
   }
   return r;
 } 
@@ -68,55 +70,66 @@ main( void ){
     return EXIT_FAILURE;
   }
 
-  serial_set_line_state( SERIAL_DTR, 0, &serial );
-  usleep( 1e3 );
-  serial_set_line_state( SERIAL_DTR, 1, &serial );
-  usleep( 2e6 );
+  reset_device( );    
 
   const char field[ ] = "ID_MODEL_FROM_DATABASE";
   printf("%s: %s\n", field, serial_get_udev_param_value( field, strlen(field), &serial ) );
 
-  for( int i = 0, j = 0 ; ; ){
-    usleep( 1000 );
-    
-    while( 0 != flfail ){
-      if( flexit ){
-        serial_close( &serial );
-        return EXIT_FAILURE;
-      }
+  pid_t proc = fork( );
+  if( 0 != proc ){
+    for( int i = 0, j = 0 ; ; ){
       usleep( 1000 );
-    }
-
-    if( first ){
-      printf("Message sent with %ld bytes...\n", serial_writef( &serial, "UTEST:WRITE_LF\n" ) );
-      first = 0;
-    }
-
-    if( !strncmp( "UTEST:OK:WRITE_LF\n", buf, buflen ) && (0 != buflen) ){
-      printf("\n------- [TEST %d] --------\n", j );
-      printf("Message (%zu):%s\n", buflen, buf );
-      printf("Status: Sucess\n");
-      memset( buf, 0, sizeof(buf) );
-      buflen = 0;
-
-      if( !i ){
-        serial_set_iomode( SERIAL_STDIO, &serial );  
-        printf("Test with: SERIAL_STDIO\n");
-        i--;
-      }
-      else{
-        serial_set_iomode( SERIAL_POSIX, &serial );  
-        printf("Test with: SERIAL_POSIX\n");
-        i++;
+      
+      while( 0 != flfail ){
+        if( flexit ){
+          serial_close( &serial );
+          return EXIT_FAILURE;
+        }
+        usleep( 1000 );
       }
 
-      j++;
+      if( !strncmp( "UTEST:OK:WRITE_LF\n", buf, 18 ) && (0 != buflen) ){
+        printf("\n------- [TEST %d] --------\n", j );
+        printf("Message (%zu):%s\n", buflen, buf );
+        printf("Status: Sucess\n");
+  
+        memmove( buf, buf, buflen );
+        memset( buf+buflen-18, 0, sizeof(buf) );
+        buflen -= 18;
+
+        if( !i ){
+          serial_set_iomode( SERIAL_STDIO, &serial );  
+          printf("Test with: SERIAL_STDIO\n");
+          i--;
+        }
+        else{
+          serial_set_iomode( SERIAL_POSIX, &serial );  
+          printf("Test with: SERIAL_POSIX\n");
+          i++;
+         }
+
+        j++;
+        printf("------------------------\n" );
+      }
+    }
+    
+    serial_close( &serial );
+  }
+  else
+    for( int j  = 0 ; j < 500 ; ++j ){
+      usleep( 5e5 );
+      
+      while( 0 != flfail ){
+        if( flexit ){
+          serial_close( &serial );
+          return EXIT_FAILURE;
+        }
+        usleep( 1000 );
+      }
+
       printf("Writting other message...\n");
       printf("Message sent with %ld bytes...\n", serial_writef( &serial, "UTEST:WRITE_LF\n" ) );
-        // printf("Failed to send the message...\n");
-
-      printf("------------------------\n" );
     }
-  }
 
+  exit( 0 );
 }

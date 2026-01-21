@@ -741,7 +741,8 @@ serial_event_enable(
       ev.events = EPOLLIN;
     else 
       ev.events = EPOLLOUT;
-    
+
+    ev.events |= EPOLLET;
     ev.data.fd = serial->fd;      
 
     if( -1 == epoll_ctl( serial->event[i].fd, EPOLL_CTL_ADD, serial->fd, &ev ) ){
@@ -1295,7 +1296,7 @@ _serial_write(
   const size_t len
 ){
   if( 0 != serial->config.event_timeout_ms ){
-    int8_t ev = serial_event_wait( serial, serial->config.event_timeout_ms, TX );
+    int8_t ev = serial_event_wait( serial, serial->config.event_timeout_ms, TX );  
     if( 1 > ev ){
       if( (EPOLLHUP == errno) || (EBADF == errno) )
         errno = ENODEV;
@@ -1449,7 +1450,6 @@ serial_flush(
       err = 0 != fflush( serial->fp ) ? -1 : 0; 
       break;
     case SERIAL_POSIX: 
-      err = -1 == tcflush( serial->fd, TCOFLUSH ) ? -1 : 0;
       break;
     case SERIAL_URING: 
       break;
@@ -1458,7 +1458,7 @@ serial_flush(
   if( -1 == err ){
     error_print( "fflush" );
     return -1;
-  }
+  }  
 
   return 0;
 }
@@ -2053,11 +2053,6 @@ fs_error(
     case SERIAL_URING: 
       break;
   }
-
-  if( -1 == access( serial->pathname, F_OK ) ){
-    error_print( "ferror" );
-    errno = ENODEV;
-  }
   
   return 0;
 }
@@ -2098,10 +2093,8 @@ async_epoll_thread(
     if( serial->async.close )
       break;
 
-    // TODO 
-    
     size_t len = serial_read( (char *) buf, sizeof(buf), 0, sizeof(buf)-1, serial );    
-
+    
     if( !len ){
       if( (errno == ENODEV) || (errno == EIO) ){        
         printf("Device got disconnected (%d)%s...\n", serial->fd, serial->pathname );

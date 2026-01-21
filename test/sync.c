@@ -212,7 +212,7 @@ main( void ){
       printf( "Failed at %d...\n", j ); 
       exit( EXIT_FAILURE );
     }
-    usleep( 1000 );
+    usleep( 10 );
   }
   
   for( int j = 0 ; j < 2 ; ++j ){
