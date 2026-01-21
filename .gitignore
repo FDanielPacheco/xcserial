@@ -57,6 +57,7 @@ dkms.conf
 build/
 docs/html
 docs/man
+docs/other
 release/
 .vscode/
 *.tmp

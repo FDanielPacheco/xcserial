@@ -5,7 +5,7 @@
 /**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************//**
  * @file      xcserial.c
  * 
- * @version   1.0.0
+ * @version   1.0.1
  *
  * @date      18-09-2025
  *
@@ -20,7 +20,7 @@
  *            https://man7.org/linux/man-pages/man2/TIOCMSET.2const.html \n 
  *            https://people.na.infn.it/~garufi/didattica/CorsoAcq/SerialProgrammingInPosixOSs.pdf \n
  *            https://man7.org/linux/man-pages/man3/errno.3.html
-* 
+ * 
  **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
 
 /***************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************
@@ -46,34 +46,78 @@
  * Local Types
  **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
 
- typedef struct{
+typedef struct{
   char       text[ NAME_MAX ];
   baudrate_t code;
 } lut_t;
 
 /***************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************
+ * Private enums
+ **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+
+typedef enum{
+  RX = 0, TX = 1,
+} serial_direction_t;
+
+/***************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************
  * Local Function Prototype
  **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
 
+//!< Udev API wrapper
 int8_t clear_field_id( const char * field, const size_t length, serial_id_t * identificator );
 int8_t add_field_id( const char * field, const size_t length, serial_id_t * identificator );
 int8_t get_ids( const char * pathname, serial_id_t * identificator );
 int8_t cmp_ids( serial_id_t * id1, serial_id_t * id2 );
 int8_t cpy_fields_ids( serial_id_t * dst, const serial_id_t * src );
 
+//!< Termios API wrapper
 int8_t get_termios( int fd, struct termios * tty );
 int8_t apply_termios( int fd, struct termios * tty );
 
-int8_t fs_error( serial_t * serial );
+//!< Error handler
+int8_t fs_error( serial_t * serial, size_t call_ret );
+//!< Internal serial write wrapper
+size_t _serial_write( serial_t * serial, const void * data, const size_t len );
+size_t _serial_read( void * data, const size_t len, serial_t * serial );
+size_t _serial_readline( char * data, const size_t len, serial_t * serial );
 
+//!< Asyncronous method for unix, stdio mode
 void * async_epoll_thread( void * arg );
 
+//!< Look up tables helpers
 const char * get_stringlut_from_code( void * code, const lut_t * table, const size_t nitems, const size_t size );
 const char * get_baudrate_from_code( const baudrate_t code );
 const char * get_flow_control_from_code( const flow_control_t code );
 const char * get_parity_from_code( const parity_t code );
 const char * get_data_bits_from_code( const data_bits_t code );
 const char * get_stop_bits_from_code( const stop_bits_t code );
+
+/**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************//**
+ * @brief Waits for and returns the triggered serial port event.
+ *
+ * The `serial_manager_t` must be initialized with `serial_manage` prior to calling this function.
+ *
+ * @param[in] serial The serial port structure (`serial_t`) associated with the serial port itself.
+ * @param[in] timeout Timeout in milliseconds (-1 for indefinite blocking).
+ * @param[in] side If 0 the input trigger will listened, otherwise the output trigger.
+ *
+ * @return On success, 0 is returned if data is available for reading (EPOLLIN). 1 is returned if the serial port is ready for writing (EPOLLOUT).
+ *         On error, the function returns -1 and sets `errno` to indicate the error, this can represent timeout.
+ * 
+**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+int8_t serial_event_wait( serial_t * serial, const int timeout, const serial_direction_t side );
+
+/**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************//**
+ * @brief  Connects the serial port with epoll for event-driven operation. \n
+ * Instead of continuous polling, epoll allows the application to sleep until a serial port event occurs, drastically reducing CPU saturation during idle periods.
+ *  
+ * @param[out] serial The serial port structure (`serial_t`) to be filled.
+ * 
+ * @return Upon success, the serial port is attached to epoll for event-driven operation, and the 0 is returned. \n 
+ *         Otherwise, -1 is returned and `errno` is set to indicate the error.
+ *
+ **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+int8_t serial_event_enable( serial_t * serial );
 
 /***************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************
  * Local Macros
@@ -250,13 +294,13 @@ serial_open(
       serial_close( serial );
       return -1;
     }
-    
   }
 
   if( NULL != async )
     memcpy( &(serial->async), async, sizeof(serial_async_t) );
   serial->async.close = 1;
 
+  serial->iomode = SERIAL_STDIO;
   return 0;
 }
 
@@ -684,20 +728,26 @@ serial_event_enable(
 
   if( !serial_valid( serial ) )
     return -1;
+
+  for( uint8_t i = 0 ; i < 2 ; ++i ){
+    serial->event[i].fd = epoll_create1( 0 );
+    if( -1 == serial->event[i].fd ){
+      error_print( "epoll_create1" );
+      return -1;
+    } 
+
+    struct epoll_event ev;
+    if( RX == i )
+      ev.events = EPOLLIN;
+    else 
+      ev.events = EPOLLOUT;
     
-  serial->event.fd = epoll_create1( 0 );
-  if( -1 == serial->event.fd ){
-    error_print( "epoll_create1" );
-    return -1;
-  } 
+    ev.data.fd = serial->fd;      
 
-  struct epoll_event ev;
-  ev.events = EPOLLIN;
-  ev.data.fd = serial->fd;      
-
-  if( -1 == epoll_ctl( serial->event.fd, EPOLL_CTL_ADD, serial->fd, &ev ) ){
-    error_print( "epoll_ctl" );
-    return -1;
+    if( -1 == epoll_ctl( serial->event[i].fd, EPOLL_CTL_ADD, serial->fd, &ev ) ){
+      error_print( "epoll_ctl" );
+      return -1;
+    }
   }
 
   return 0;
@@ -950,33 +1000,24 @@ serial_set_rule(
   if( !get_termios( serial->fd, &tty ) )
     return -1;
 
-  tty.c_lflag &= (tcflag_t) ~(ICANON);                                        // Disable canonical mode
-  tty.c_lflag &= (tcflag_t) ~(ECHO);                                          // Disable echo
-  tty.c_lflag &= (tcflag_t) ~(ECHOE);                                         // Disable erasure
-  tty.c_lflag &= (tcflag_t) ~(ECHONL);                                        // Disable new-line echo
-  tty.c_lflag &= (tcflag_t) ~(ISIG);                                          // Disable interpretation of INTR, QUIT and SUSP
-  tty.c_oflag &= (tcflag_t) ~(OPOST);                                         // Set to raw output
-  tty.c_oflag &= (tcflag_t) ~(ONLCR);                                         // Disable the conversion of new line to CR/LF
-  tty.c_iflag &= (tcflag_t) ~(IGNBRK);                                        // Disable ignore break condition
-  tty.c_iflag &= (tcflag_t) ~(BRKINT);                                        // Disable send a SIGINT when a break condition is detected
-  tty.c_iflag &= (tcflag_t) ~(INLCR);                                         // Disable map NL to CR
-  tty.c_iflag &= (tcflag_t) ~(IGNCR);                                         // Disable ignore CR
-  tty.c_iflag &= (tcflag_t) ~(ICRNL);                                         // Disable map CR to NL
+  cfmakeraw( &tty );
+  memset( &tty.c_cc, 0, sizeof( cc_t ) * NCCS );
+
   tty.c_cc[VEOF]     = 4;                                                     // Set EOF character to EOT (Ctrl+D, ASCII 4) - or 0 if not used
   tty.c_cc[VTIME]    = timeout;                                               // Set timeout for read() in tenths of a second
   tty.c_cc[VMIN]     = min;                                                   // Set minimum number of bytes for read() to return
   tty.c_cc[VINTR]    = 0;                                                     // Disable interrupt character (Ctrl+C)
   tty.c_cc[VQUIT]    = 0;                                                     // Disable quit character (Ctrl+\)
-  tty.c_cc[VERASE]   = 0;                                                     // Disable erase character (backspace) - not relevant in raw mode
-  tty.c_cc[VKILL]    = 0;                                                     // Disable kill character (Ctrl+U) - not relevant in raw mode
-  tty.c_cc[VSWTC]    = 0;                                                     // Disable switch character - not usually needed
   tty.c_cc[VSUSP]    = 0;                                                     // Disable suspend character (Ctrl+Z)
-  tty.c_cc[VEOL]     = 0;                                                     // Disable end-of-line character - not relevant in raw mode
-  tty.c_cc[VREPRINT] = 0;                                                     // Disable reprint character - not relevant in raw mode
-  tty.c_cc[VDISCARD] = 0;                                                     // Disable discard character - not relevant in raw mode
-  tty.c_cc[VWERASE]  = 0;                                                     // Disable word erase character - not relevant in raw mode
-  tty.c_cc[VLNEXT]   = 0;                                                     // Disable literal next character - not relevant in raw mode
-  tty.c_cc[VEOL2]    = 0;                                                     // Disable alternate end-of-line character - not relevant in raw mode
+  // tty.c_cc[VERASE]   = 0;                                                  // Disable erase character (backspace) - not relevant in raw mode
+  // tty.c_cc[VKILL]    = 0;                                                  // Disable kill character (Ctrl+U) - not relevant in raw mode
+  // tty.c_cc[VSWTC]    = 0;                                                  // Disable switch character - not usually needed
+  // tty.c_cc[VEOL]     = 0;                                                  // Disable end-of-line character - not relevant in raw mode
+  // tty.c_cc[VREPRINT] = 0;                                                  // Disable reprint character - not relevant in raw mode
+  // tty.c_cc[VDISCARD] = 0;                                                  // Disable discard character - not relevant in raw mode
+  // tty.c_cc[VWERASE]  = 0;                                                  // Disable word erase character - not relevant in raw mode
+  // tty.c_cc[VLNEXT]   = 0;                                                  // Disable literal next character - not relevant in raw mode
+  // tty.c_cc[VEOL2]    = 0;                                                  // Disable alternate end-of-line character - not relevant in raw mode
 
   if( !apply_termios( serial->fd, &tty ) )
     return -1;
@@ -1058,7 +1099,67 @@ serial_set_config(
 
 /**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
 size_t 
-serial_readLine( 
+_serial_read( 
+  void * data, 
+  const size_t len, 
+  serial_t * serial
+){
+  size_t size = 0;
+  switch( serial->iomode ){
+    case SERIAL_STDIO: 
+      size = fread( data, 1, len, serial->fp );
+      break;
+
+    case SERIAL_POSIX:
+      size = (size_t) read( serial->fd, data, len);
+      break;
+
+    case SERIAL_URING: 
+      break;
+  }
+  return size;
+}
+
+/**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+size_t 
+_serial_readline( 
+  char * data, 
+  const size_t len, 
+  serial_t * serial
+ ){
+  size_t idx = 0;
+  switch( serial->iomode ){
+    case SERIAL_STDIO: 
+        if( !fgets( data, (int) len, serial->fp ) ){
+          fs_error( serial, 0 ); 
+          return 0;
+        }
+        idx = strlen( data );
+      break;
+
+    case SERIAL_POSIX:
+      for( idx = 0 ; idx < len - 1 ; ++idx ){
+        int err = (int) read( serial->fd, &data[idx], 1 );
+        if( 1 != err )
+          fs_error( serial, (size_t) err ); 
+
+        if( '\n' == data[idx] ){
+          data[idx + 1] = '\0';          
+          break;
+        }
+      }
+      break;
+
+    case SERIAL_URING: 
+      break;
+  }
+  
+  return idx;
+ }
+
+/**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+size_t 
+serial_readline( 
   char * buf, 
   const size_t size, 
   const size_t offset, 
@@ -1076,12 +1177,12 @@ serial_readLine(
 
   if( size <= offset ){
     errno = ENOMEM;
-    error_print( "serial_readLine overflow" );
+    error_print( "serial_readline overflow" );
     return 0;
   }
 
   if( 0 != serial->config.event_timeout_ms ){
-    int8_t ev = serial_event_wait( serial, serial->config.event_timeout_ms );
+    int8_t ev = serial_event_wait( serial, serial->config.event_timeout_ms, RX );
     if( 1 > ev ){
       if( (EPOLLHUP == errno) || (EBADF == errno) )
         errno = ENODEV;
@@ -1092,9 +1193,8 @@ serial_readLine(
   clearerr( serial->fp );
   errno = 0;
 
-  fgets( buf + offset, (int) (size - offset), serial->fp );
-
-  fs_error( serial );
+  size_t len = _serial_readline( buf + offset, size - offset, serial );
+  fs_error( serial, len );
   if( (ENODEV == errno) || !serial_get_databits( NULL, serial ) ){
     errno = ENODEV;
     return 0;
@@ -1141,7 +1241,7 @@ serial_read(
     size_t to_read = length;
     
     if( 0 != serial->config.event_timeout_ms ){
-      int8_t ev = serial_event_wait( serial, serial->config.event_timeout_ms );
+      int8_t ev = serial_event_wait( serial, serial->config.event_timeout_ms, RX );
       if( 1 > ev ){
         if( (EPOLLHUP == errno) || (EBADF == errno) )
           errno = ENODEV;
@@ -1172,11 +1272,10 @@ serial_read(
     clearerr( serial->fp );
     errno = 0;
 
-    size_t received = fread( buf + offset + total, 1, to_read, serial->fp );
-    
+    size_t received = _serial_read( buf + offset + total, to_read, serial );
     total += received;
 
-    fs_error( serial );
+    fs_error( serial, received );
     if( (ENODEV == errno) || !serial_get_databits( NULL, serial ) ){
       total = 0;
       break;
@@ -1186,6 +1285,64 @@ serial_read(
   }
 
   return total;  
+}
+
+/**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+size_t 
+_serial_write( 
+  serial_t * serial, 
+  const void * data, 
+  const size_t len
+){
+  if( 0 != serial->config.event_timeout_ms ){
+    int8_t ev = serial_event_wait( serial, serial->config.event_timeout_ms, TX );
+    if( 1 > ev ){
+      if( (EPOLLHUP == errno) || (EBADF == errno) )
+        errno = ENODEV;
+      errno = ETIME;
+    }
+  }
+
+  size_t size = 0;
+  switch( serial->iomode ){
+    case SERIAL_STDIO: 
+      size = fwrite( data, 1, len, serial->fp );
+      break;
+    case SERIAL_POSIX: 
+      size = (size_t) write( serial->fd, (uint8_t *) data, len );
+      break;
+    case SERIAL_URING: 
+      break;
+  }
+  return size;
+}
+
+/**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+size_t 
+serial_write( 
+  serial_t * serial, 
+  const uint8_t * data, 
+  const size_t len
+){
+
+  if( !data ) {
+    errno = EINVAL;
+    error_print( "data null" );
+    return 0;
+  }
+
+  if( !serial_valid( serial ) )
+    return 0;
+
+  size_t size = _serial_write( serial, data, len );
+
+  if( size < len )
+    return (size_t) fs_error( serial, size );
+
+  if( -1 == serial_flush( serial ) )
+    return (size_t) fs_error( serial, 0 );
+    
+  return size;
 }
 
 /**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
@@ -1223,46 +1380,17 @@ serial_writef(
     return 0;
   }
 
-  size_t size = fwrite( buf, 1, (size_t) len, serial->fp );
+  size_t size = _serial_write( serial, buf, (size_t) len );
 
   va_end( args );
   if( size < (size_t) len )
-    return (size_t) fs_error( serial );
+    return (size_t) fs_error( serial, size );
 
   if( -1 == serial_flush( serial ) )
-    return (size_t) fs_error( serial );
+    return (size_t) fs_error( serial, size );
 
   return size;
 }
-
-/**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
-size_t 
-serial_write( 
-  serial_t * serial, 
-  const uint8_t * data, 
-  const size_t len
-){
-
-  if( !data ) {
-    errno = EINVAL;
-    error_print( "data null" );
-    return 0;
-  }
-
-  if( !serial_valid( serial ) )
-    return 0;
-
-  size_t size = fwrite( data, 1, len, serial->fp );
-
-  if( size < len )
-    return (size_t) fs_error( serial );
-
-  if( -1 == serial_flush( serial ) )
-    return (size_t) fs_error( serial );
-    
-  return size;
-}
-
 
 /**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
 uint8_t 
@@ -1314,8 +1442,20 @@ serial_flush(
 
   if( !serial_valid( serial ) )
     return -1;
-  
-  if( 0 != fflush( serial->fp ) ){
+
+  int8_t err = 0;
+  switch( serial->iomode ){
+    case SERIAL_STDIO:
+      err = 0 != fflush( serial->fp ) ? -1 : 0; 
+      break;
+    case SERIAL_POSIX: 
+      err = -1 == tcflush( serial->fd, TCOFLUSH ) ? -1 : 0;
+      break;
+    case SERIAL_URING: 
+      break;
+  }
+
+  if( -1 == err ){
     error_print( "fflush" );
     return -1;
   }
@@ -1350,31 +1490,45 @@ serial_available(
 int8_t 
 serial_event_wait( 
   serial_t * serial, 
-  const int timeout
+  const int timeout,
+  const serial_direction_t side
 ){
 
   if( !serial_valid( serial ) )
     return -1;
 
-  struct epoll_event ev; 
-  int event = epoll_wait( serial->event.fd, &ev, 1, timeout );
-  if( -1 == event ){
-    perror("epoll_wait");
-    return -1;
-  }
+  struct epoll_event ev;
+  int event = -1;
 
-  // Timeout
-  if( !event )
-    return 0;
+  for( ; ; ){
+    if( RX == side )
+      event = epoll_wait( serial->event[RX].fd, &ev, 1, timeout );
+    else
+      event = epoll_wait( serial->event[TX].fd, &ev, 1, timeout );
 
-  if( EPOLLIN & ev.events )
-    return EPOLLIN;
-  
-  if( EPOLLHUP & ev.events )
-    return EPOLLHUP;
+    if( -1 == event ){
+      perror("epoll_wait");
+      return -1;
+    }
 
-  if( EPOLLERR & ev.events )
-    return EPOLLERR;
+    // Timeout
+    if( !event )
+      return 0;
+
+    if( RX == side )
+      if( EPOLLIN & ev.events )
+        return EPOLLIN;
+
+    if( TX == side )
+      if( EPOLLOUT & ev.events )
+        return EPOLLOUT;
+    
+    if( EPOLLHUP & ev.events )
+      return EPOLLHUP;
+
+    if( EPOLLERR & ev.events )
+      return EPOLLERR;
+  }  
     
   return -1;  
 }
@@ -1865,24 +2019,46 @@ apply_termios(
 /**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
 int8_t
 fs_error( 
-  serial_t * serial
+  serial_t * serial,
+  size_t call_ret
 ){
 
-  FILE * fp = serial->fp;
-  if( feof( fp ) ){
-    clearerr( fp );
-    errno = ETIME;
-    
-    if( !serial_valid( serial ) )
-      errno = ENODEV;
-  }
-  else {
-    if( ferror( fp ) ){
-      error_print( "ferror" );
-      errno = ENODEV;
-    }
+  switch( serial->iomode ){
+    case SERIAL_STDIO: 
+      if( feof( serial->fp ) ){
+        clearerr( serial->fp );       
+        if( !serial_valid( serial ) )
+          errno = ENODEV;
+        else
+          errno = ETIME;
+      }
+      else if( ferror( serial->fp ) ){
+        error_print( "ferror" );
+        errno = ENODEV;
+      }
+      break;
+            
+    case SERIAL_POSIX: 
+      if( !call_ret ){
+        if( !serial_valid( serial ) )
+          errno = ENODEV;
+        else
+          errno = ETIME;
+      } 
+      else if( 0 > call_ret ){
+        error_print( "ferror" );
+        errno = ENODEV;
+      }
+
+    case SERIAL_URING: 
+      break;
   }
 
+  if( -1 == access( serial->pathname, F_OK ) ){
+    error_print( "ferror" );
+    errno = ENODEV;
+  }
+  
   return 0;
 }
 
@@ -1921,6 +2097,8 @@ async_epoll_thread(
   for( ; ; ){
     if( serial->async.close )
       break;
+
+    // TODO 
     
     size_t len = serial_read( (char *) buf, sizeof(buf), 0, sizeof(buf)-1, serial );    
 
@@ -1936,13 +2114,44 @@ async_epoll_thread(
       continue;
     }
 
-      serial->async.rcb( buf, len );
-    }    
+    serial->async.rcb( buf, len );
+  }    
 
+  return NULL;
+}
+
+/**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+int8_t 
+serial_set_iomode( 
+  const serial_iomode_t iomode, 
+  serial_t * serial 
+){
+
+  if( !serial_valid( serial ) )
+    return -1;
+
+  serial->iomode = iomode;    
+  return 0;
+}
+
+/**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+const char *
+serial_get_iomode(
+  serial_iomode_t * iomode, 
+  const serial_t * serial
+){
+
+  if( !serial_valid( serial ) || !iomode )
     return NULL;
-  }
 
+  *iomode = serial->iomode;  
+  switch( *iomode ){
+    case SERIAL_STDIO: return "libstdio";
+    case SERIAL_POSIX: return "libunist";
+    case SERIAL_URING: return "liburing";
+  }  
+}
 
-  /***************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************
-   * End of file
-   **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+/***************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************
+ * End of file
+ **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/

@@ -96,6 +96,13 @@ typedef enum {
   SERIAL_DCD = TIOCM_CAR,                                                      //!< DCD - Data Carrier Detected
 } serial_lines_t;
 
+//!< IO function selector 
+typedef enum{
+  SERIAL_STDIO,
+  SERIAL_POSIX,
+  SERIAL_URING,
+} serial_iomode_t;
+
 // Not present in POSIX
 #define B62500 10014
 
@@ -110,17 +117,18 @@ typedef int8_t (*serial_disconnect_callback_t)( void );                        /
 
 //!< The serial port configuration data structure. Can be used to configure the serial port running configuration. 
 typedef struct {
-  baudrate_t      baudrate;                                                    //!< The baud rate of the communication in bits per second, example B9600.
-  flow_control_t  flow_control;                                                //!< The hardware flow control, example FLOWCONTROL_HARDWARE.
-  parity_t        parity;                                                      //!< The detection of error parity, example PARITY_ODD.
-  data_bits_t     data_bits;                                                   //!< The number of bits per serial word, example DATA_BITS_8.
-  stop_bits_t     stop_bits;                                                   //!< The number of stop bits per serial word, example STOP_BITS_1.
-  uint8_t         timeout_ds;                                                  //!< The time any read function will wait in deciseconds for the information to arrive, example 200.
-  int             event_timeout_ms;                                            //!< The timeout for waiting for a event
-  uint8_t         min_bytes;                                                   //!< The minimum number of bytes to necessary receive before returning the read function.
-  uint8_t         readonly:1;                                                  //!< If the file pointer will be given in read only mode, example false = r+.
+  baudrate_t       baudrate;                                                    //!< The baud rate of the communication in bits per second, example B9600.
+  flow_control_t   flow_control;                                                //!< The hardware flow control, example FLOWCONTROL_HARDWARE.
+  parity_t         parity;                                                      //!< The detection of error parity, example PARITY_ODD.
+  data_bits_t      data_bits;                                                   //!< The number of bits per serial word, example DATA_BITS_8.
+  stop_bits_t      stop_bits;                                                   //!< The number of stop bits per serial word, example STOP_BITS_1.
+  uint8_t          timeout_ds;                                                  //!< The time any read function will wait in deciseconds for the information to arrive, example 200.
+  int              event_timeout_ms;                                            //!< The timeout for waiting for a event
+  uint8_t          min_bytes;                                                   //!< The minimum number of bytes to necessary receive before returning the read function.
+  uint8_t          readonly:1;                                                  //!< If the file pointer will be given in read only mode, example false = r+.
 } serial_config_t;
 
+//!< Udev parameters structure
 typedef struct{
   char field[NAME_MAX];                                                        //!< The udevadm serial port field    
   char value[NAME_MAX];                                                        //!< The udevadm serial port field value    
@@ -153,9 +161,10 @@ typedef struct{
   int               fd;                                                        //!< The file descriptor for the serial port opened.
   FILE             *fp;                                                        //!< The file pointer for the serial port opened.
   serial_config_t  config;                                                     //!< The serial port configuration
-  serial_event_t   event;                                                      //!< The serial port event configuration, used to minimize the syncronous operations and additionally enable async operation
+  serial_event_t   event[2];                                                   //!< The serial port event configuration, used to minimize the syncronous operations and additionally enable async operation
   serial_async_t   async;
   serial_id_t      id;
+  serial_iomode_t  iomode;
 } serial_t;
 
 /***************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************
@@ -230,22 +239,6 @@ int8_t serial_open( serial_t * serial, const char * pathname, uint8_t readonly, 
  * 
  **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
 int8_t serial_reopen( serial_t * serial, uint16_t iterations );
-
-/**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************//**
- * @brief  Connects the serial port with epoll for event-driven operation. \n
- * Instead of continuous polling, epoll allows the application to sleep until a serial port event occurs, drastically reducing CPU saturation during idle periods.
- *  
- * @param[out] serial The serial port structure (`serial_t`) to be filled.
- * 
- * @return Upon success, the serial port is attached to epoll for event-driven operation, and the 0 is returned. \n 
- *         Otherwise, -1 is returned and `errno` is set to indicate the error.
- *
- *  - `EINVAL`: Invalid argument \n
- *  - `EBADF`: Bad file descriptor \n
- *  - ...
- * 
- **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
-int8_t serial_event_enable( serial_t * serial );
 
 
 /**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************//**
@@ -677,7 +670,7 @@ const char * serial_get_databits( data_bits_t * data_bits, const serial_t * seri
  *  - Never blocks.
  *
  **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
-size_t serial_readLine( char * buf, const size_t size, const size_t offset, serial_t * serial );
+size_t serial_readline( char * buf, const size_t size, const size_t offset, serial_t * serial );
 
 
 /**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************//**
@@ -773,24 +766,6 @@ size_t serial_write( serial_t * serial, const uint8_t * data, const size_t len )
  * 
 **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
 size_t serial_available( const serial_t * serial );
-
-/**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************//**
- * @brief Waits for and returns the triggered serial port event.
- *
- * The `serial_manager_t` must be initialized with `serial_manage` prior to calling this function.
- *
- * @param[in] serial The serial port structure (`serial_t`) associated with the serial port itself.
- * @param[in] timeout Timeout in milliseconds (-1 for indefinite blocking).
- *
- * @return On success, 0 is returned if data is available for reading (EPOLLIN). 1 is returned if the serial port is ready for writing (EPOLLOUT).
- *         On error, the function returns -1 and sets `errno` to indicate the error, this can represent timeout.
- *
- *  - `EINVAL`: Invalid argument \n
- *  - `EBADF`: Bad file descriptor \n
- *  - ...
- * 
-**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
-int8_t serial_event_wait( serial_t * serial, const int timeout );
 
 /**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************//**
  * @brief Sets the state (asserted or deasserted) of a serial port control line.
@@ -914,6 +889,35 @@ const char * serial_get_udev_param_value( const char * field, size_t length, ser
  * 
 **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
 int8_t serial_set_udev_id( const serial_id_t * id, serial_t * serial );
+
+/**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************//**
+ * @brief Set the serial input/output mode. \n
+ * The `iomode` decide how the information is sent and received
+ * from the serial port.
+ *
+ * @param[in] iomode It can be selected as:
+ *  -`SERIAL_STDIO`: use functions from the standard library, e.g., fwrite, fread 
+ *  -`SERIAL_POSIX`: use functions from the unix standard library, e.g., write, read 
+ *  -`SERIAL_URING`: use functions from the libiouring library.
+ * @param[out] serial The serial port structure (`serial_t`) associated with the serial port itself.
+ *
+ * @return Upon success, the serial port will get updated with the `iomode` argument, and 0 will be returned. \n 
+ *         Otherwise, -1 is returned and `errno` is set to indicate the error.
+ * 
+ *************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+int8_t serial_set_iomode( const serial_iomode_t iomode, serial_t * serial );
+
+/**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************//**
+ * @brief Gets the selected the serial input/output mode. \n
+ *
+ * @param[out] iomode The parameter to be filled.
+ * @param[in] serial The serial port structure (`serial_t`) associated with the serial port itself.
+ *
+ * @return Upon success, the serial port will fill the `iomode` argument from the serial port specified, and a string with the mode will be returned. \n 
+ *         Otherwise, NULL is returned and `errno` is set to indicate the error.
+ *
+ *************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+const char * serial_get_iomode( serial_iomode_t * iomode, const serial_t * serial );
 
 /***************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************
  * External C++ extern macro

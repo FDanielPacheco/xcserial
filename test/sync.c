@@ -9,7 +9,16 @@
 #define N_PARAMS  3
 
 int
-test( serial_t * serial, int _timeout_ms, uint8_t _timeout_ds, const char * send, const char * received, int id, int op ){
+test( 
+  serial_t * serial, 
+  int _timeout_ms, 
+  uint8_t _timeout_ds, 
+  const char * send, 
+  const char * received, 
+  int id, 
+  int op,
+  int wait
+){
   printf("\n------- [TEST %d] --------\n", id );
 
   serial_set_timeout( _timeout_ms, serial );
@@ -21,8 +30,10 @@ test( serial_t * serial, int _timeout_ms, uint8_t _timeout_ds, const char * send
     return 0;
   }
 
-  printf("Press Enter to continue:\n");
-  getchar( );
+  if( wait ){
+    printf("Press Enter to continue:\n");
+    getchar( );
+  }
 
   size_t nread = 0, nwrite;
   uint8_t buf[ BUFSIZ ];
@@ -73,7 +84,7 @@ test( serial_t * serial, int _timeout_ms, uint8_t _timeout_ds, const char * send
     if( op )
       nread = serial_read( (char *) buf, sizeof(buf), offset, sizeof(buf)-1, serial ); 
     else
-      nread = serial_readLine( (char *) buf, sizeof(buf), 0, serial );
+      nread = serial_readline( (char *) buf, sizeof(buf), 0, serial );
     
     if( !nread ){
       if( (errno == ENODEV) || (errno == EIO) ){        
@@ -100,6 +111,16 @@ test( serial_t * serial, int _timeout_ms, uint8_t _timeout_ds, const char * send
         }
       }
       else{
+        if( ETIME == errno ){
+          serial_set_line_state( SERIAL_DTR, 0, serial );
+          usleep( 1e3 );
+          serial_set_line_state( SERIAL_DTR, 1, serial );
+          usleep( 2e6 );
+          
+          return -1;
+        }
+          
+        printf("Failed with errno = %d\n", errno );
         serial_close( serial );
         return 0;
       }
@@ -143,29 +164,73 @@ main( void ){
   const char field[ ] = "ID_MODEL_FROM_DATABASE";
   printf("%s: %s\n", field, serial_get_udev_param_value( field, strlen(field), &serial ) );
 
-  int test_id = 1;
-  printf("Result %d: %s\n", test_id, test( &serial, 100, 0, "UTEST:WRITE\n", "UTEST:OK:WRITE", test_id, 1 ) ? "Passed" : "Failed" );
-  printf("\n------------------------\n" );
+  typedef struct {
+    int          timeout_ms;
+    uint8_t      timeout_ds;
+    const char * send;
+    const char * received;
+    int          op;   
+  } test_params_t;
 
-  test_id = 2;
-  printf("Result %d: %s\n", test_id, test( &serial, 0, 10, "UTEST:WRITE\n", "UTEST:OK:WRITE", test_id, 1 ) ? "Passed" : "Failed" );
-  printf("\n------------------------\n" );
+  test_params_t parameters[ ] = {
+    {100 , 0 , "UTEST:WRITE\n"   , "UTEST:OK:WRITE"     , 1},
+    {0   , 10, "UTEST:WRITE\n"   , "UTEST:OK:WRITE"     , 1},
+    {3000, 0 , "UTEST:WRITE\n"   , "UTEST:OK:WRITE"     , 1},
+    {0   , 3 , "UTEST:WRITE_LF\n", "UTEST:OK:WRITE_LF\n", 0},
+    {10  , 0 , "UTEST:WRITE_LF\n", "UTEST:OK:WRITE_LF\n", 0},
+    {0   , 30, "UTEST:WRITE_LF\n", "UTEST:OK:WRITE_LF\n", 0},
+  };
+  int len_parameters = sizeof( parameters )/sizeof( parameters[0] );
 
-  test_id = 3;
-  printf("Result %d: %s\n", test_id, test( &serial, 3000, 0, "UTEST:WRITE\n", "UTEST:OK:WRITE", test_id, 1 ) ? "Passed" : "Failed" );
-  printf("\n------------------------\n" );
+  serial_iomode_t iomodes[2] = {SERIAL_STDIO, SERIAL_POSIX}; 
 
-  test_id = 4;
-  printf("Result %d: %s\n", test_id, test( &serial, 0, 3, "UTEST:WRITE_LF\n", "UTEST:OK:WRITE_LF\n", test_id, 0 ) ? "Passed" : "Failed" );
-  printf("\n------------------------\n" );
+  for( int i = 0, j = 0 ; ; ++j ){
+    i = !i ? 1 : 0;
+    serial_set_iomode( iomodes[i], &serial );  
 
-  test_id = 5;
-  printf("Result %d: %s\n", test_id, test( &serial, 10, 0, "UTEST:WRITE_LF\n", "UTEST:OK:WRITE_LF\n", test_id, 0 ) ? "Passed" : "Failed" );
-  printf("\n------------------------\n" );
+    int err = test( 
+      &serial, 
+      parameters[0].timeout_ms, parameters[0].timeout_ds, 
+      parameters[0].send, parameters[0].received, j, parameters[0].op,
+      0 
+    );
 
-  test_id = 6;
-  printf("Result %d: %s\n", test_id, test( &serial, 0, 30, "UTEST:WRITE_LF\n", "UTEST:OK:WRITE_LF\n", test_id, 0 ) ? "Passed" : "Failed" );
-  printf("\n------------------------\n" );
+    char response[NAME_MAX];
+    switch( err ){
+      case 0:  strcpy( response, "Failed" ); break;
+      case -1: strcpy( response, "Timeout" ); break;
+      default: strcpy( response, "Sucess" ); break;
+    }
+
+    printf(
+      "Result %d: %s\n", 
+      i, response 
+    );
+    printf("------------------------\n" );
+
+    if( !strcmp( response, "Failed") ){
+      printf( "Failed at %d...\n", j ); 
+      exit( EXIT_FAILURE );
+    }
+    usleep( 1000 );
+  }
+  
+  for( int j = 0 ; j < 2 ; ++j ){
+    serial_set_iomode( iomodes[j], &serial );  
+    for( int i = 0 ; i < len_parameters ; ++i ){
+      printf(
+        "Result %d: %s\n", 
+        i, 
+        test( 
+          &serial, 
+          parameters[i].timeout_ms, parameters[i].timeout_ds, 
+          parameters[i].send, parameters[i].received, i, parameters[i].op,
+          1 
+        ) ? "Passed" : "Failed"
+      );
+      printf("\n------------------------\n" );
+    }
+  }
 
   serial_close( &serial );
   return 0;   
