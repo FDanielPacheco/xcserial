@@ -155,6 +155,15 @@ typedef struct{
   struct epoll_event      ev;                                                  //!< The type of event that happen
 } serial_event_t;
 
+//!< Initialization structure
+typedef struct{
+  uint8_t            readonly; 
+  serial_config_t  * config; 
+  serial_id_t      * id; 
+  serial_async_t   * async;
+  serial_iomode_t    iomode;
+} serial_open_opts_t;
+
 //!< The serial port data structure. It defines the layer of abstraction between this library and the operations done at a lower level. 
 typedef struct{
   char             pathname[PATH_MAX];                                         //!< The path to the serial port, example "/dev/ttyUSB0"
@@ -211,7 +220,7 @@ typedef struct{
  * @endcode
  *   
  **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
-int8_t serial_open( serial_t * serial, const char * pathname, uint8_t readonly, const serial_config_t * config, serial_id_t * id, serial_async_t * async );
+int8_t serial_open( serial_t * serial, const char * pathname, serial_open_opts_t * opts );
 
 /**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************//**
  * @brief Attempts to reopen a previously opened serial port. \n

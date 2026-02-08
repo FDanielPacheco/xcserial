@@ -15,7 +15,9 @@ uint8_t flexit = 0;
 uint8_t flfail = 0;
 
 void
-reset_device( void ){
+reset_ucontroller(
+  void
+) {
   serial_set_line_state( SERIAL_DTR, 0, &serial );
   usleep( 1e3 );
   serial_set_line_state( SERIAL_DTR, 1, &serial );
@@ -37,7 +39,7 @@ handler_disconnect( void ){
   if( -1 == r )
     flexit = 1;
   else{
-    reset_device( );    
+    reset_ucontroller( );    
     flfail = 0;
   }
   return r;
@@ -47,7 +49,6 @@ handler_disconnect( void ){
 int 
 main( void ){
   const char  *    pathname = "/dev/ttyACM0";
-  const uint8_t    readonly = 0;
   const baudrate_t baudrate = B19200; 
 
   const char params[ N_PARAMS ][NAME_MAX] = {
@@ -56,7 +57,7 @@ main( void ){
     "ID_SERIAL_SHORT"
   };
 
-  if( -1 == serial_open( &serial, pathname, readonly, NULL, NULL, NULL ) )
+  if( -1 == serial_open( &serial, pathname, NULL ) )
     return EXIT_FAILURE;
 
   if( -1 == serial_set_udev_param_list( params, N_PARAMS, NAME_MAX, &serial ) )
@@ -70,7 +71,7 @@ main( void ){
     return EXIT_FAILURE;
   }
 
-  reset_device( );    
+  reset_ucontroller( );    
 
   const char field[ ] = "ID_MODEL_FROM_DATABASE";
   printf("%s: %s\n", field, serial_get_udev_param_value( field, strlen(field), &serial ) );

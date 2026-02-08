@@ -8,6 +8,36 @@
 
 #define N_PARAMS  3
 
+void
+reset_ucontroller(
+  serial_t * serial
+) {
+  serial_set_line_state( SERIAL_DTR, 0, serial );
+  usleep( 1e3 );
+  serial_set_line_state( SERIAL_DTR, 1, serial );
+  usleep( 2e6 );
+}
+
+int
+handle_disconnect( 
+  serial_t * serial
+) {
+  printf("Device got disconnected (%d)%s...\n", serial->fd, serial->pathname );
+  if( -1 == serial_reopen( serial, 1000 ) ){
+    serial_close( serial );
+    return 0;
+  }
+  else{
+    reset_ucontroller( serial );
+    if( !serial_print_config( 1, "", serial ) ){
+      fprintf( stderr, "Failed to reset: %d, %s\n", errno, strerror(errno) );
+      return 0;
+    }
+    printf("Device got reconnected (%d)%s...\n", serial->fd, serial->pathname );
+  }
+  return 1;
+}
+
 int
 test( 
   serial_t * serial, 
@@ -26,7 +56,7 @@ test(
 
   const uint8_t output = 1;
   if( !serial_print_config( output, "", serial ) ){
-    fprintf( stderr, "Error: %d, %s\n", errno, strerror(errno) );
+    fprintf( stderr, "Failed to retrive data: %d, %s\n", errno, strerror(errno) );
     return 0;
   }
 
@@ -39,42 +69,21 @@ test(
   uint8_t buf[ BUFSIZ ];
 
   while( !nread ){
-
     nwrite = 0;
 
     while( !nwrite ){
       nwrite = serial_writef( serial, "%s", send );
     
       if( !nwrite ){
-
         if( (errno == ENODEV) || (errno == EIO) ){
-          printf("Device got disconnected (%d)%s...\n", serial->fd, serial->pathname );
-          if( -1 == serial_reopen( serial, 1000 ) ){
-            serial_close( serial );
+          if( !handle_disconnect( serial ) )
             return 0;
-          }
-          else{
-            nread = 0;
-
-            serial_set_line_state( SERIAL_DTR, 0, serial );
-            usleep( 1e3 );
-            serial_set_line_state( SERIAL_DTR, 1, serial );
-            usleep( 2e6 );
-
-            if( !serial_print_config( output, "", serial ) ){
-              fprintf( stderr, "Error: %d, %s\n", errno, strerror(errno) );
-              return 0;
-            }
-
-            printf("Device got reconnected (%d)%s...\n", serial->fd, serial->pathname );
-          }
         }
-        else{
+        else {
           serial_close( serial );
           return 0;
         }
       }
-      
     }
 
     printf("Wrote: %ld [B]\n", nwrite );
@@ -88,35 +97,14 @@ test(
     
     if( !nread ){
       if( (errno == ENODEV) || (errno == EIO) ){        
-        printf("Device got disconnected (%d)%s...\n", serial->fd, serial->pathname );
-                
-        if( -1 == serial_reopen( serial, 1000 ) ){
-          serial_close( serial );
+        if( !handle_disconnect( serial ) )
           return 0;
-        }
-        else{
-          nread = 0;
 
-          serial_set_line_state( SERIAL_DTR, 0, serial );
-          usleep( 1e3 );
-          serial_set_line_state( SERIAL_DTR, 1, serial );
-          usleep( 2e6 );
-
-          if( !serial_print_config( output, "", serial ) ){
-            fprintf( stderr, "Error: %d, %s\n", errno, strerror(errno) );
-            return 0;
-          }
-
-          printf("Device got reconnected (%d)%s...\n", serial->fd, serial->pathname );
-        }
+        nread = 0;
       }
       else{
         if( ETIME == errno ){
-          serial_set_line_state( SERIAL_DTR, 0, serial );
-          usleep( 1e3 );
-          serial_set_line_state( SERIAL_DTR, 1, serial );
-          usleep( 2e6 );
-          
+          reset_ucontroller( serial );
           return -1;
         }
           
@@ -138,7 +126,6 @@ test(
 int 
 main( void ){
   const char  *    pathname = "/dev/ttyACM0";
-  const uint8_t    readonly = 0;
   const baudrate_t baudrate = B19200; 
   serial_t serial; 
 
@@ -148,18 +135,16 @@ main( void ){
     "ID_SERIAL_SHORT"
   };
 
-  if( -1 == serial_open( &serial, pathname, readonly, NULL, NULL, NULL ) )
+  if( -1 == serial_open( &serial, pathname, NULL ) )
     return EXIT_FAILURE;
 
   if( -1 == serial_set_udev_param_list( params, N_PARAMS, NAME_MAX, &serial ) )
     return EXIT_FAILURE;
 
-  serial_set_baudrate( baudrate, &serial );
+  if( -1 == serial_set_baudrate( baudrate, &serial ) && ENODEV == errno )
+    return EXIT_FAILURE;
 
-  serial_set_line_state( SERIAL_DTR, 0, &serial );
-  usleep( 1e3 );
-  serial_set_line_state( SERIAL_DTR, 1, &serial );
-  usleep( 2e6 );
+  reset_ucontroller( &serial );
    
   const char field[ ] = "ID_MODEL_FROM_DATABASE";
   printf("%s: %s\n", field, serial_get_udev_param_value( field, strlen(field), &serial ) );
@@ -182,41 +167,44 @@ main( void ){
   };
   int len_parameters = sizeof( parameters )/sizeof( parameters[0] );
 
-  serial_iomode_t iomodes[2] = {SERIAL_STDIO, SERIAL_POSIX}; 
+  serial_iomode_t iomodes[] = {SERIAL_POSIX}; 
+  int dim = sizeof(iomodes)/sizeof(iomodes[0]);
 
-  for( int i = 0, j = 0 ; ; ++j ){
-    i = !i ? 1 : 0;
-    serial_set_iomode( iomodes[i], &serial );  
+  for( int j = 0 ; ; ++j ){
+    break;
+    for( int mode = 0 ; mode < dim ; ++mode ){
+      serial_set_iomode( iomodes[mode], &serial );  
 
-    int err = test( 
-      &serial, 
-      parameters[0].timeout_ms, parameters[0].timeout_ds, 
-      parameters[0].send, parameters[0].received, j, parameters[0].op,
-      0 
-    );
+      int err = test( 
+        &serial, 
+        parameters[0].timeout_ms, parameters[0].timeout_ds, 
+        parameters[0].send, parameters[0].received, j, parameters[0].op,
+        0 
+      );
 
-    char response[NAME_MAX];
-    switch( err ){
-      case 0:  strcpy( response, "Failed" ); break;
-      case -1: strcpy( response, "Timeout" ); break;
-      default: strcpy( response, "Sucess" ); break;
+      char response[NAME_MAX];
+      switch( err ){
+        case 0:  strcpy( response, "Failed" ); break;
+        case -1: strcpy( response, "Timeout" ); break;
+        default: strcpy( response, "Sucess" ); break;
+      }
+
+      printf(
+        "Result %d: %s\n", 
+        mode, response 
+      );
+      printf("------------------------\n" );
+
+      if( !strcmp( response, "Failed") ){
+        printf( "Failed at %d...\n", j ); 
+        exit( EXIT_FAILURE );
+      }
+      usleep( 10 );
     }
-
-    printf(
-      "Result %d: %s\n", 
-      i, response 
-    );
-    printf("------------------------\n" );
-
-    if( !strcmp( response, "Failed") ){
-      printf( "Failed at %d...\n", j ); 
-      exit( EXIT_FAILURE );
-    }
-    usleep( 10 );
   }
-  
-  for( int j = 0 ; j < 2 ; ++j ){
-    serial_set_iomode( iomodes[j], &serial );  
+
+  for( int mode = 0 ; mode < dim ; ++mode ){
+    serial_set_iomode( iomodes[mode], &serial );  
     for( int i = 0 ; i < len_parameters ; ++i ){
       printf(
         "Result %d: %s\n", 

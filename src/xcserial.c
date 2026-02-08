@@ -41,7 +41,6 @@
 
 #include <xcserial.h>
 
-
 /***************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************
  * Local Types
  **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
@@ -123,7 +122,7 @@ int8_t serial_event_enable( serial_t * serial );
  * Local Macros
  **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
 
-#define error_print( txt, ... ) fprintf( stderr, "Error: " txt ",at line %d in file %s\n Errno: %d, %s\n", ##__VA_ARGS__, __LINE__, __FILE__, errno, strerror(errno) )
+#define error_print( txt, ... ) fprintf( stderr, "Error: " txt ", at line %d in file %s\nErrno: %d, %s\n", ##__VA_ARGS__, __LINE__, __FILE__, errno, strerror(errno) )
 
 /***************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************
  * Lookup tables
@@ -198,11 +197,8 @@ int8_t
 serial_open( 
   serial_t * serial, 
   const char * pathname, 
-  uint8_t readonly, 
-  const serial_config_t * config, 
-  serial_id_t * id, 
-  serial_async_t * async
-){
+  serial_open_opts_t * opts
+){ 
 
   if( !serial ){
     errno = EINVAL;
@@ -221,6 +217,12 @@ serial_open(
     error_print( "pathname is greater than %d", PATH_MAX );
     return -1;
   }
+
+  uint8_t            readonly = !opts ? 0            : opts->readonly; 
+  serial_config_t  * config   = !opts ? NULL         : opts->config; 
+  serial_id_t      * id       = !opts ? NULL         : opts->id; 
+  serial_async_t   * async    = !opts ? NULL         : opts->async;
+  serial_iomode_t    iomode   = !opts ? SERIAL_STDIO : opts->iomode;
   
   memset( serial, 0, sizeof(serial_t) );
 
@@ -300,7 +302,7 @@ serial_open(
     memcpy( &(serial->async), async, sizeof(serial_async_t) );
   serial->async.close = 1;
 
-  serial->iomode = SERIAL_STDIO;
+  serial->iomode = iomode;
   return 0;
 }
 
@@ -350,7 +352,15 @@ serial_reopen(
       if( 0 < cmp_ids( &id, &(serial->id) ) ){
         serial_t tmp;
 
-        if( -1 == serial_open( &tmp, pathname, serial->config.readonly, &(serial->config), &(serial->id), &(serial->async) ) ){          
+        serial_open_opts_t opts = {
+          .readonly = serial->config.readonly,
+          .config   = &(serial->config),
+          .id       = &(serial->id),
+          .async    = &(serial->async),
+          .iomode   = serial->iomode,
+        };
+
+        if( -1 == serial_open( &tmp, pathname, &opts ) ){          
           if( EBUSY == errno ){
             error_print("serial_open\n");
             return -1;
@@ -1196,10 +1206,8 @@ serial_readline(
 
   size_t len = _serial_readline( buf + offset, size - offset, serial );
   fs_error( serial, len );
-  if( (ENODEV == errno) || !serial_get_databits( NULL, serial ) ){
-    errno = ENODEV;
+  if( (ENODEV == errno) || !serial_get_databits( NULL, serial ) )
     return 0;
-  }
 
   return strlen( buf + offset );  
 }
@@ -1763,11 +1771,8 @@ serial_get_baudrate(
   }
 
   struct termios tty;
-  if( !get_termios( serial->fd, &tty ) ){
-    if( NULL != baudrate )
-      *baudrate = serial->config.baudrate;      
-    return get_baudrate_from_code( serial->config.baudrate );
-  }
+  if( !get_termios( serial->fd, &tty ) )
+    return NULL;
   
   const baudrate_t br = cfgetospeed( &tty );
   if( NULL != baudrate )
@@ -1789,11 +1794,8 @@ serial_get_parity(
   }
 
   struct termios tty;
-  if( !get_termios( serial->fd, &tty ) ){
-    if( NULL != parity )
-      *parity = serial->config.parity;      
-    return get_parity_from_code( serial->config.parity );
-  }
+  if( !get_termios( serial->fd, &tty ) )
+    return NULL;
   
   if( !( tty.c_iflag & (tcflag_t) INPCK ) ){
     if( NULL != parity )
@@ -1826,11 +1828,8 @@ serial_get_stopbits(
   }
 
   struct termios tty;
-  if( !get_termios( serial->fd, &tty ) ){
-    if( NULL != stop_bits )
-      *stop_bits = serial->config.stop_bits;      
-    return get_stop_bits_from_code( serial->config.stop_bits );
-  }
+  if( !get_termios( serial->fd, &tty ) )
+    return NULL;
 
   if( !( tty.c_iflag & (tcflag_t) CSTOPB ) ){
     if( NULL != stop_bits )
@@ -1856,11 +1855,8 @@ serial_get_databits(
   }
 
   struct termios tty;
-  if( !get_termios( serial->fd, &tty ) ){
-    if( NULL != data_bits )
-      *data_bits = serial->config.data_bits;     
-    return get_data_bits_from_code( serial->config.data_bits );
-  }
+  if( !get_termios( serial->fd, &tty ) )
+    return NULL;
 
   tcflag_t _data_bits = tty.c_cflag & (tcflag_t) CSIZE;
   if( NULL != data_bits ) 
@@ -1881,11 +1877,8 @@ serial_get_flowcontrol(
   }
 
   struct termios tty;
-  if( !get_termios( serial->fd, &tty ) ){
-    if( NULL != flow_control )
-      *flow_control = serial->config.flow_control;     
-    return get_flow_control_from_code( serial->config.flow_control );
-  }
+  if( !get_termios( serial->fd, &tty ) )
+    return NULL;
 
   if( !(tty.c_cflag & (tcflag_t) CRTSCTS) ){
     if( !(tty.c_iflag & (tcflag_t) (IXON | IXOFF | IXANY) ) ){
@@ -1926,15 +1919,8 @@ serial_get_rule(
   } 
 
   struct termios tty;
-  if( !get_termios( serial->fd, &tty ) ){
-    if( NULL != timeout )
-      *timeout = serial->config.timeout_ds;
-    if( NULL != min )
-      *min = serial->config.min_bytes;
-
-    snprintf( txr_repre, txt_len, "%hhd, %hhd", serial->config.timeout_ds, serial->config.min_bytes );
-    return txr_repre;
-  }
+  if( !get_termios( serial->fd, &tty ) )
+    return NULL;
   
   if( NULL != timeout )
     *timeout = tty.c_cc[VTIME];
@@ -1990,6 +1976,7 @@ get_termios(
   int result = tcgetattr( fd, tty );
   if( 0 != result ){
     error_print( "tcgetattr" );
+    errno = ENODEV;
     return 0;
   }
   return 1;
@@ -2045,10 +2032,6 @@ fs_error(
         else
           errno = ETIME;
       } 
-      else if( 0 > call_ret ){
-        error_print( "ferror" );
-        errno = ENODEV;
-      }
 
     case SERIAL_URING: 
       break;
