@@ -30,7 +30,7 @@ DOCS_DIR = docs
 
 # Test 
 TEST_DIR = test
-TESTS = sync async
+TESTS = sync async systrace
 TEST_BINS = $(addprefix $(BUILD_DIR)/, $(TESTS))
 
 # --- Target 1: xcserial ---
@@ -162,7 +162,7 @@ cleanrelease:
 	@echo "Cleaning the release directory..."
 	@rm -rf release
 	
-example: single_a
+tests: single_a
 	$(MAKE) $(TESTS)
 
 $(TESTS): %: single_a $(BUILD_DIR)/%

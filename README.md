@@ -93,7 +93,7 @@ int main( void ) {
   serial_t serial;
 
   // Open port. Last three NULLs are for port configurations, udev params and async callbacks.
-  if( -1 == serial_open( &serial, port, 0, NULL, NULL, NULL ) )
+  if( -1 == serial_open( &serial, port, NULL ) )
     return EXIT_FAILURE;
 
   // Set configuration

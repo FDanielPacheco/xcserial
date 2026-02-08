@@ -170,8 +170,7 @@ main( void ){
   serial_iomode_t iomodes[] = {SERIAL_POSIX}; 
   int dim = sizeof(iomodes)/sizeof(iomodes[0]);
 
-  for( int j = 0 ; ; ++j ){
-    break;
+  for( int j = 0 ; j < 100 ; ++j ){
     for( int mode = 0 ; mode < dim ; ++mode ){
       serial_set_iomode( iomodes[mode], &serial );  
 

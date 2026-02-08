@@ -64,6 +64,7 @@ typedef enum {
   FLOWCONTROL_NONE,                                                           //!< No flow control is used.
   FLOWCONTROL_HARDWARE,                                                       //!< Hardware flow control is used.
   FLOWCONTROL_SOFTWARE,                                                       //!< Software flow control is used.
+  _FLOWCONTROL_INV,
 } flow_control_t;
 
 //!< The options available for the parity mode on the serial communication.
@@ -71,6 +72,7 @@ typedef enum {
   BPARITY_NONE,                                                                //!< No parity bit is used.
   BPARITY_ODD,                                                                 //!< Parity bit used and it checks for odd.
   BPARITY_EVEN,                                                                //!< Parity bit used and it checks for even.
+  _BPARITY_INV,
 } parity_t;
 
 //!< The options available for the number of data bits used on the serial communication.
@@ -79,12 +81,14 @@ typedef enum {
   DATA_BITS_6 = CS6,                                                          //!< 6 Data bits that compose the content of a serial frame
   DATA_BITS_7 = CS7,                                                          //!< 7 Data bits that compose the content of a serial frame
   DATA_BITS_8 = CS8,                                                          //!< 8 Data bits that compose the content of a serial frame
+  _DATA_BITS_INV,
 } data_bits_t;
 
 //!< The options available for the number of stop bits used  on the serial communication.
 typedef enum {
   STOP_BITS_1,                                                                //!< 1 Stop bit after each N data bits
   STOP_BITS_2,                                                                //!< 2 Stop bits after each N data bits
+  _STOP_BITS_INV,
 } stop_bits_t;
 
 //!< The options available for the real/virtual lines present on the serial communication.
@@ -104,6 +108,7 @@ typedef enum{
 } serial_iomode_t;
 
 // Not present in POSIX
+#define _BINV  1
 #define B62500 10014
 
 typedef speed_t baudrate_t;                                                    //!< Type used by the termios API.
@@ -136,6 +141,7 @@ typedef struct{
 
 //!< The serial identification used if the device is disconnected
 typedef struct{
+  struct udev * udev;
   char bus[NAME_MAX];                                                          //!< The type of serial port e.g., usb.
   serial_udev_paramater_t dev[16];                                             //!< A list of udevadm fields .
   uint8_t ndev;                                                                //!< The number of fields used on the list `dev`.
@@ -174,6 +180,8 @@ typedef struct{
   serial_async_t   async;
   serial_id_t      id;
   serial_iomode_t  iomode;
+  char             resv1[512];
+  char             resv2[256];
 } serial_t;
 
 /***************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************
@@ -185,10 +193,7 @@ typedef struct{
  *  
  * @param[out] serial The serial port structure (`serial_t`) to be filled.
  * @param[in]  pathname The absolute path for the device file, example `/dev/ttyUSB0`
- * @param[in]  readonly The permission of the file descriptor associated with the serial port, 0 is read/write and 1 is read only. 
- * @param[in]  config The serial port configuration data structure (`serial_config_t`), this configuration must have been updated with the user's desired information, can be nullable if the user desire the default configuration present in `serial_default_config`. 
- * @param[in]  id Indication of the udevadm parameters that identify this serial port, used for reconnection upon disconnection.
- * @param[in]  async The callback functions specified by `serial_async_t`.
+ * @param[in]  opts Additional parameters that be given before initialization.
  * 
  * @return Upon success, performing the process of opening the serial port, it returns 0 and the serial struct filled. \n
  *         Otherwise, -1 is returned and `errno` is set to indicate the error.
@@ -300,25 +305,6 @@ int8_t serial_drain( const serial_t * serial );
 
 
 /**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************//**
- * @brief Checks if a serial port is open and valid.
- *
- * This function checks if the file descriptor associated with the given serial port structure is valid and open.
- *
- * @param[in] serial The serial port structure (`serial_t`) associated with the serial port itself.
- *
- * @return Upon validating the serial port, it returns 1. \n 
- *         Otherwise, 0 is returned and `errno` is set to indicate a possible error.
- * 
- *  - `EINVAL`: Invalid argument
- *
- * @note This function only checks the validity of the file descriptor.  It does not guarantee that the serial port is actually ready for communication.  
- *       There might be other issues (e.g., hardware problems) that prevent successful communication even if this function returns `1`.
- * 
- **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
-uint8_t serial_valid( const serial_t * serial );
-
-
-/**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************//**
  * @brief Sets to the default values the configuration structure passed as argument.
  *  
  * @param[out]  config The serial port configuration data structure (`serial_config_t`) to be filled. 
@@ -390,7 +376,7 @@ int8_t serial_get_config( serial_t * serial );
  * @note The user must free the returned string.
  *  
 **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
-const char * serial_print_config( uint8_t out, const char * initial, const serial_t * serial );
+const char * serial_print_config( uint8_t out, const char * initial, serial_t * serial );
 
 
 /**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************//**
@@ -516,8 +502,7 @@ int8_t serial_set_timeout( const int timeout, serial_t * serial );
  * @brief Returns a string with the current serial port baud rate and fill a `baudrate_t` variable passed as argument.
  *        If the serial port is with problems, the past configuration will be returned.
  * 
- * @param[out] baudrate A pointer to a variable `baudrate_t` to be filled with the current serial port baud rate, can be nullable.
- * @param[in] serial The serial port structure (`serial_t`) associated with the serial port itself.
+ * @param[in/out] serial The serial port structure (`serial_t`) associated with the serial port itself.
  *
  * @return Upon success, it returns a pointer to the string with the information. \n 
  *         Otherwise NULL is returned and errno is set. 
@@ -526,15 +511,14 @@ int8_t serial_set_timeout( const int timeout, serial_t * serial );
  *  - `ENOMEM`: Memory allocation failed \n
  *
 **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
-const char * serial_get_baudrate( baudrate_t * baudrate, const serial_t * serial );
+const char * serial_get_baudrate( struct termios * tty, serial_t * serial );
 
 
 /**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************//**
  * @brief Returns a string with the current serial port parity mode and fill a `parity_t` variable passed as argument.
  *        If the serial port is with problems, the past configuration will be returned.
  * 
- * @param[out] parity A pointer to a variable `parity_t` to be filled with the current serial port parity mode, can be nullable.
- * @param[in] serial The serial port structure (`serial_t`) associated with the serial port itself.
+ * @param[in/out] serial The serial port structure (`serial_t`) associated with the serial port itself.
  *
  * @return Upon success, it returns a pointer to the string with the information. \n 
  *         Otherwise NULL is returned and errno is set. 
@@ -545,15 +529,14 @@ const char * serial_get_baudrate( baudrate_t * baudrate, const serial_t * serial
  * @note The user must free the returned string.
  * 
 **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
-const char * serial_get_parity( parity_t * parity, const serial_t * serial );
+const char * serial_get_parity( struct termios * tty, serial_t * serial );
 
 
 /**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************//**
  * @brief Returns a string with the current serial flow control mode and fill a `flow_control_t` variable passed as argument.
  *        If the serial port is with problems, the past configuration will be returned.
  * 
- * @param[out] flow_control A pointer to a variable `flow_control_t` to be filled with the current serial port flow control option, can be nullable.
- * @param[in] serial The serial port structure (`serial_t`) associated with the serial port itself.
+ * @param[in/out] serial The serial port structure (`serial_t`) associated with the serial port itself.
  *
  * @return A pointer to the string with the information. \n 
  *         Otherwise NULL is returned and errno is set. 
@@ -564,16 +547,14 @@ const char * serial_get_parity( parity_t * parity, const serial_t * serial );
  * @note The user must free the returned string.
  * 
 **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
-const char * serial_get_flowcontrol( flow_control_t * flow_control, const serial_t * serial );
+const char * serial_get_flowcontrol( struct termios * tty, serial_t * serial );
 
 
 /**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************//**
  * @brief Returns a string with the current serial port timeout in deciseconds and minimum number of bytes and fills the timeout and minimum number of bytes variables passed as argument.
  *        If the serial port is with problems, the past configuration will be returned.
  *
- * @param[out] timeout A pointer to a variable `uint8_t` to be filled with the current serial port timeout value in deciseconds, before any serial port associated read function returns, can be nullable.
- * @param[out] min A pointer to a variable `uint8_t` to be filled with the current serial port minimum number of bytes before any serial port associated read function returns, can be nullable.
- * @param[in] serial The serial port structure (`serial_t`) associated with the serial port itself.
+ * @param[in/out] serial The serial port structure (`serial_t`) associated with the serial port itself.
  *
  * @return A pointer to the string with the information. \n 
  *         Otherwise NULL is returned and errno is set. 
@@ -584,15 +565,14 @@ const char * serial_get_flowcontrol( flow_control_t * flow_control, const serial
  * @note The user must free the returned string.
  * 
 **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
-const char * serial_get_rule( uint8_t * timeout, uint8_t * min, const serial_t * serial );
+const char * serial_get_rule( struct termios * tty, serial_t * serial );
 
 
 /**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************//**
  * @brief Returns a string with the current serial port timeout in deciseconds and minimum number of bytes and fills the timeout and minimum number of bytes variables passed as argument.
  *        If the serial port is with problems, the past configuration will be returned.
  *
- * @param[out] timeout A pointer to a variable `int` to be filled with the current serial port event timeout value in milliseconds, can be nullable.
- * @param[in] serial The serial port structure (`serial_t`) associated with the serial port itself.
+ * @param[in/out] serial The serial port structure (`serial_t`) associated with the serial port itself.
  *
  * @return A pointer to the string with the information. \n 
  *         Otherwise NULL is returned and errno is set. 
@@ -603,14 +583,13 @@ const char * serial_get_rule( uint8_t * timeout, uint8_t * min, const serial_t *
  * @note The user must free the returned string.
  * 
 **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
-const char * serial_get_event_timeout( int * timeout, const serial_t * serial );
+const char * serial_get_event_timeout( serial_t * serial );
 
 
 /**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************//**
  * @brief Returns a string with the current serial port number of stop bits and fill a `stop_bits_t` variable passed as argument.
  *        If the serial port is with problems, the past configuration will be returned.
  * 
- * @param[out] stop_bits A pointer to a variable `stop_bits_t` to be filled with the current serial port number of stop bits, can be nullable.
  * @param[in] serial The serial port structure (`serial_t`) associated with the serial port itself.
  *
  * @return A pointer to the string with the information. \n 
@@ -620,15 +599,14 @@ const char * serial_get_event_timeout( int * timeout, const serial_t * serial );
  *  - `ENOMEM`: Memory allocation failed \n
  * 
 **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
-const char * serial_get_stopbits( stop_bits_t * stop_bits, const serial_t * serial );
+const char * serial_get_stopbits( struct termios * tty, serial_t * serial );
 
 
 /**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************//**
  * @brief Returns a string with the current serial port number of data bits and fill a `data_bits_t` variable passed as argument.
  *        If the serial port is with problems, the past configuration will be returned.
  * 
- * @param[out] data_bits A pointer to a variable `data_bits_t` to be filled with the current serial port number of data bits, can be nullable.
- * @param[in] serial The serial port structure (`serial_t`) associated with the serial port itself.
+ * @param[in/out] serial The serial port structure (`serial_t`) associated with the serial port itself.
  *
  * @return A pointer to the string with the information. \n 
  *         Otherwise NULL is returned and errno is set. 
@@ -637,7 +615,7 @@ const char * serial_get_stopbits( stop_bits_t * stop_bits, const serial_t * seri
  *  - `ENOMEM`: Memory allocation failed \n
  * 
 **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
-const char * serial_get_databits( data_bits_t * data_bits, const serial_t * serial );
+const char * serial_get_databits( struct termios * tty, serial_t * serial );
 
 
 /**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************//**
@@ -834,20 +812,6 @@ int8_t serial_get_line_state( const serial_lines_t line, uint8_t *state, const s
 int8_t serial_async_set_callback( serial_read_callback_t handler_read, serial_disconnect_callback_t handler_disconnect, serial_t * serial );
 
 /**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************//**
- * @brief Gets the list of devices available on the system.
- *
- * @param[out] devs Upon success, `devs` will be filled with `ndevs` tty available ports.
- * @param[in] size The total size of the list `devs`.
- * @param[in] length The length of each string inside `devs` array.
- * @param[out] ndevs Upon success, it will indicate the number of items in `devs`. 
- * 
- * @return Upon success, will fill `devs` and `ndevs`, and it returns 0. \n 
- *         Otherwise, -1 is returned and `errno` is set to indicate the error.
- * 
-**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
-int8_t serial_get_udev_devs_list( char devs[ ][PATH_MAX], uint8_t size, size_t length, uint8_t * ndevs );
-
-/**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************//**
  * @brief Sets a list of udevadm field to associate with serial port opened.
  *
  * @param[in] params A list of parameters to look for, check udevadm info /dev/tty____.
@@ -859,7 +823,7 @@ int8_t serial_get_udev_devs_list( char devs[ ][PATH_MAX], uint8_t size, size_t l
  *         Otherwise, -1 is returned and `errno` is set to indicate the error.
  * 
 **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
-int8_t serial_set_udev_param_list( const char params[][NAME_MAX], uint8_t nparams, size_t length, serial_t * serial );
+int8_t serial_set_udev_param_list( const char params[][NAME_MAX], uint8_t nparams, size_t length, serial_t * id );
 
 /**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************//**
  * @brief Sets the an udevadm field to associate with serial port opened.

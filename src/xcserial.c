@@ -58,6 +58,10 @@ typedef enum{
   RX = 0, TX = 1,
 } serial_direction_t;
 
+typedef enum {
+  FULL = 0, QUICK = 1, 
+} serial_check_t;
+
 /***************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************
  * Local Function Prototype
  **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
@@ -65,13 +69,26 @@ typedef enum{
 //!< Udev API wrapper
 int8_t clear_field_id( const char * field, const size_t length, serial_id_t * identificator );
 int8_t add_field_id( const char * field, const size_t length, serial_id_t * identificator );
-int8_t get_ids( const char * pathname, serial_id_t * identificator );
+int8_t get_ids( const char * pathname, serial_id_t * identificator, struct udev * udev );
 int8_t cmp_ids( serial_id_t * id1, serial_id_t * id2 );
 int8_t cpy_fields_ids( serial_id_t * dst, const serial_id_t * src );
+int8_t serial_get_udev_devs_list( char devs[ ][PATH_MAX], uint8_t size, size_t length, uint8_t * ndevs, struct udev * udev );
+int8_t serial_find_udev( char * path, size_t psize, struct udev * udev, serial_id_t * id );
 
 //!< Termios API wrapper
 int8_t get_termios( int fd, struct termios * tty );
 int8_t apply_termios( int fd, struct termios * tty );
+int8_t _serial_set_baudrate( const baudrate_t baudrate, struct termios * tty );
+int8_t _serial_set_parity( const parity_t parity, struct termios * tty );
+int8_t _serial_set_stopbits( const stop_bits_t stop_bits, struct termios * tty );
+int8_t _serial_set_databits( const data_bits_t data_bits, struct termios * tty );
+int8_t _serial_set_flowcontrol( const flow_control_t flow_control, struct termios * tty );
+int8_t _serial_set_rule( const uint8_t timeout, const uint8_t min, struct termios * tty );
+baudrate_t _serial_get_baudrate( struct termios * tty );
+parity_t _serial_get_parity( struct termios * tty );
+stop_bits_t _serial_get_stopbits( struct termios * tty );
+data_bits_t _serial_get_databits( struct termios * tty );
+flow_control_t _serial_get_flowcontrol( struct termios * tty );
 
 //!< Error handler
 int8_t fs_error( serial_t * serial, size_t call_ret );
@@ -118,6 +135,24 @@ int8_t serial_event_wait( serial_t * serial, const int timeout, const serial_dir
  **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
 int8_t serial_event_enable( serial_t * serial );
 
+/**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************//**
+ * @brief Checks if a serial port is open and valid.
+ *
+ * This function checks if the file descriptor associated with the given serial port structure is valid and open.
+ *
+ * @param[in] serial The serial port structure (`serial_t`) associated with the serial port itself.
+ *
+ * @return Upon validating the serial port, it returns 1. \n 
+ *         Otherwise, 0 is returned and `errno` is set to indicate a possible error.
+ * 
+ *  - `EINVAL`: Invalid argument
+ *
+ * @note This function only checks the validity of the file descriptor.  It does not guarantee that the serial port is actually ready for communication.  
+ *       There might be other issues (e.g., hardware problems) that prevent successful communication even if this function returns `1`.
+ * 
+ **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+uint8_t serial_valid( const serial_t * serial, const serial_check_t check );
+
 /***************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************
  * Local Macros
  **************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
@@ -158,6 +193,7 @@ lut_t lut_baudrate[ ] = {
   {"1152000", B1152000},
   {"1500000", B1500000},
   {"2000000", B2000000},
+  {"failed",  _BINV},
 };
 
 static const 
@@ -165,6 +201,7 @@ lut_t lut_parity[ ] = {
   {"none", BPARITY_NONE},
   {"odd" , BPARITY_ODD },
   {"even", BPARITY_EVEN},
+  {"failed", _BPARITY_INV},
 };
 
 static const
@@ -172,6 +209,7 @@ lut_t lut_flow_control[ ] = {
   {"none"    , FLOWCONTROL_NONE    },
   {"hardware", FLOWCONTROL_HARDWARE},
   {"software", FLOWCONTROL_SOFTWARE},
+  {"failed",   _FLOWCONTROL_INV},
 };
 
 static const
@@ -180,12 +218,14 @@ lut_t lut_data_bits[ ] = {
   {"6", DATA_BITS_6},
   {"7", DATA_BITS_7},
   {"8", DATA_BITS_8},
+  {"failed", _DATA_BITS_INV},
 };
 
 static const
 lut_t lut_stop_bits[ ] = {
   {"1", STOP_BITS_1},
   {"2", STOP_BITS_2},
+  {"failed", _STOP_BITS_INV},
 };
 
 /***************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************
@@ -244,6 +284,8 @@ serial_open(
   else   
     serial->fp = fdopen( serial->fd, "r+" );
 
+  setbuf(serial->fp, NULL);
+
   if( !serial->fp ){
     error_print( "fdopen" );
     if( -1 == close( serial->fd ) )
@@ -285,7 +327,14 @@ serial_open(
   }
 
   if( NULL != id ){
-    if( -1 == get_ids( serial->pathname, id ) ){
+    struct udev * udev = udev_new( );
+    if( !udev ){
+      error_print( "udev_new" );
+      serial_close( serial );
+      return -1;
+    }
+  
+    if( -1 == get_ids( serial->pathname, id, udev ) ){
       error_print( "get_ids" );
       serial_close( serial );
       return -1;
@@ -296,6 +345,8 @@ serial_open(
       serial_close( serial );
       return -1;
     }
+
+    udev_unref( udev );
   }
 
   if( NULL != async )
@@ -319,72 +370,102 @@ serial_reopen(
     return -1;    
   }
 
-  uint8_t nmax_devs = 255;
-  uint8_t n_list_devs;
-  char list_devs[ nmax_devs ][PATH_MAX];
+  struct udev * udev = udev_new();  
+  if( !udev ){
+    error_print( "udev_new" );
+    return -1;
+  }
 
-  uint32_t delay = 1;
-  uint32_t factor = 2;
+  serial_id_t id;
+  cpy_fields_ids( &id, &serial->id );
 
   serial_close( serial );
 
+  char pathname[PATH_MAX];
+  int8_t found = -1;
+
   for( uint16_t j = 0 ; j < iterations ; ++j ){
-    if( -1 == serial_get_udev_devs_list( list_devs, nmax_devs, PATH_MAX, &n_list_devs ) )
-      return EXIT_FAILURE;
-
-    for( uint8_t i = 0 ; i < n_list_devs ; ++i ){
-      serial_id_t id;
-      memset( &id, 0, sizeof(serial_id_t) );
-
-      const char * pathname = list_devs[ i ];
-      
-      if( -1 == cpy_fields_ids( &id, &(serial->id) ) )
-        continue;
-
-      if( -1 == get_ids( pathname, &id ) )
-        continue;
-
-      size_t len = 0;
-      char output[ PATH_MAX ];
-      for( uint8_t k = 0 ; k < id.ndev ; ++k )
-        len += (size_t) snprintf( output + len, sizeof(output) - (size_t) len, "%s: %s\n", id.dev[k].field, id.dev[k].value );
-
-      if( 0 < cmp_ids( &id, &(serial->id) ) ){
-        serial_t tmp;
-
-        serial_open_opts_t opts = {
-          .readonly = serial->config.readonly,
-          .config   = &(serial->config),
-          .id       = &(serial->id),
-          .async    = &(serial->async),
-          .iomode   = serial->iomode,
-        };
-
-        if( -1 == serial_open( &tmp, pathname, &opts ) ){          
-          if( EBUSY == errno ){
-            error_print("serial_open\n");
-            return -1;
-          }
-        }
-        else{
-          if( !serial_valid( &tmp ) || (-1 == serial_set_databits( serial->config.data_bits, &tmp )) ){
-            error_print("serial_open\n");
-            return -1;
-          }          
-
-          memcpy( serial, &tmp, sizeof(serial_t) );
-          return 0;
-        }
-      }
-    }
+    if( !(found = serial_find_udev( pathname, sizeof(pathname), udev, &id )) )   
+      break;
+    sleep(2);
+  }
     
-    printf("Next iteration in %d s ...\n", delay);
-    sleep( delay );
-    if( delay <= 30 )
-      delay *= factor;
+  udev_unref( udev );
+
+  if( -1 == found )
+    return -1;
+
+  serial_t tmp;
+  serial_open_opts_t opts = {
+    .readonly = serial->config.readonly,
+    .config   = &(serial->config),
+    .id       = &(serial->id),
+    .async    = &(serial->async),
+    .iomode   = serial->iomode,
+  };
+
+  if( -1 == serial_open( &tmp, pathname, &opts ) ){          
+    if( EBUSY == errno ){
+      error_print("serial_open\n");
+      return -1;
+    }
+  }
+  else {
+    if( !serial_valid( &tmp, FULL ) || (-1 == serial_set_databits( serial->config.data_bits, &tmp )) ){
+      serial_close( &tmp );
+      error_print("serial_open\n");
+      return -1;
+    }          
+
+    memcpy( serial, &tmp, sizeof(serial_t) );
+    return 0;
   }
 
   return -1;
+}
+
+/**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+int8_t
+serial_find_udev( 
+  char        * path,
+  size_t        psize,
+  struct udev * udev,
+  serial_id_t * id
+){
+  if( !id || !udev || !path )
+    return -1;
+
+  struct udev_enumerate * enumerate = udev_enumerate_new(udev);
+  if( !enumerate )
+    return -1;
+
+  udev_enumerate_add_match_subsystem(enumerate, "tty");
+  for( int i = 0 ; i < id->ndev ; ++i )
+    udev_enumerate_add_match_property(enumerate, id->dev[i].field, id->dev[i].value);
+
+  udev_enumerate_scan_devices(enumerate);
+  struct udev_list_entry * devices = udev_enumerate_get_list_entry(enumerate);
+  struct udev_list_entry * entry;
+
+  int8_t found = -1;
+  udev_list_entry_foreach( entry, devices ){
+    const char * syspath = udev_list_entry_get_name( entry );
+    struct udev_device * dev = udev_device_new_from_syspath( udev, syspath );
+    if( !dev )
+      continue;
+          
+    const char * devnode = udev_device_get_devnode( dev );
+    if( devnode ){
+      strncpy( path, devnode, psize);
+      found = 0;
+      udev_device_unref(dev);
+      break; 
+    }
+    udev_device_unref(dev);
+  }
+
+  udev_enumerate_unref(enumerate);
+  return found;      
 }
 
 /**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
@@ -394,13 +475,15 @@ serial_set_udev_id(
   serial_t * serial
 ){
 
-  if( !serial_valid( serial ) || !id ){
+  if( !serial_valid( serial, QUICK ) || !id ){
     errno = EINVAL;
     return -1;
   }
   memcpy( &(serial->id), id, sizeof(serial_id_t) );
   return 0;
 }
+
+/**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
 
 
 /**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
@@ -409,7 +492,8 @@ serial_get_udev_devs_list(
   char devs[ ][PATH_MAX], 
   uint8_t size, 
   size_t length, 
-  uint8_t * ndevs
+  uint8_t * ndevs,
+  struct udev * udev
 ){
 
   if( !devs ){
@@ -417,30 +501,21 @@ serial_get_udev_devs_list(
     return -1;
   }
 
-  struct udev * udev = udev_new();  
-  if( !udev ){
-    error_print( "udev_new" );
-    return -1;
-  }
-
   struct udev_enumerate * enumerate = udev_enumerate_new( udev );
   if( !enumerate ){
     error_print( "udev_enumerate_new" );
-    udev_unref( udev );
     return -1;
   }
 
   if( 0 > udev_enumerate_add_match_subsystem( enumerate, "tty" ) ){
     error_print( "udev_enumerate_add_match_subsystem" );
     udev_enumerate_unref( enumerate );
-    udev_unref( udev );
     return -1;
   }
 
   if( 0 > udev_enumerate_scan_devices( enumerate ) ){
     error_print( "udev_enumerate_scan_devices" );
     udev_enumerate_unref( enumerate );
-    udev_unref( udev );
     return -1;
   }
 
@@ -448,7 +523,6 @@ serial_get_udev_devs_list(
   if( !devices ){
     error_print( "udev_enumerate_get_list_entry" );
     udev_enumerate_unref( enumerate );
-    udev_unref( udev );
     return -1;
   }
 
@@ -464,7 +538,6 @@ serial_get_udev_devs_list(
     if( !dev ){
       error_print( "udev_device_new_from_syspath" );
       udev_enumerate_unref( enumerate );
-      udev_unref( udev );
       return -1;
     }
 
@@ -483,7 +556,6 @@ serial_get_udev_devs_list(
   }
 
   udev_enumerate_unref( enumerate );
-  udev_unref( udev );
   return 0;
 }
 
@@ -509,15 +581,22 @@ serial_set_udev_param_list(
     if( !param )
       continue;
 
-    if( -1 == add_field_id( param, length, &(serial->id) ) )
+    if( -1 == add_field_id( param, length, &serial->id ) )
       break;
   }
 
-  if( -1 == get_ids( serial->pathname, &(serial->id) ) ){
-    error_print( "get_ids" );
+  struct udev * udev = udev_new( );
+  if( !udev ){
+    error_print("udev_new");
     return -1;
-  }  
+  }
 
+  if( -1 == get_ids( serial->pathname, &serial->id, udev ) ){
+    error_print("get_ids");
+    return -1;
+  }
+
+  udev_unref( udev );
   return 0;
 }
 
@@ -572,7 +651,8 @@ add_field_id(
 int8_t 
 get_ids( 
   const char * pathname, 
-  serial_id_t * identificator
+  serial_id_t * identificator,
+  struct udev * udev
 ){
 
   if( !pathname || !identificator ){
@@ -580,26 +660,18 @@ get_ids(
     return -1;
   }
 
-  struct udev * udev = udev_new( );
-  if( !udev )
-    return -1;
-  
   const char * basename = strrchr( pathname, '/');
-  if( !basename ){
-    udev_unref( udev );
+  if( !basename )
     return -1;
-  }
+
   basename++;   
 
   struct udev_device * dev = udev_device_new_from_subsystem_sysname( udev, "tty", basename );
-  if( !dev ){
-    udev_unref( udev );
+  if( !dev )
     return -1;
-  }
 
   struct udev_device * parent = udev_device_get_parent( dev );
   if( !parent ){
-    udev_unref( udev );
     udev_device_unref( dev );
     return -1;
   }
@@ -609,13 +681,14 @@ get_ids(
     if( NULL != strncpy( identificator->bus, subsys, NAME_MAX ) )
       for( uint8_t i = 0 ; i < identificator->ndev ; ++i ){
         serial_udev_paramater_t * parameter = &(identificator->dev[i]);
-        const char * value = !udev_device_get_property_value( dev, parameter->field ) ? " " : udev_device_get_property_value( dev, parameter->field );          
-        if( !strncpy( parameter->value, value, NAME_MAX ) )
+        
+        const char * value = udev_device_get_property_value( dev, parameter->field );          
+        const char * svalue = value ? value : " ";
+        if( !strncpy( parameter->value, svalue, NAME_MAX ) )
           break;
       }
   }
 
-  udev_unref( udev );
   udev_device_unref( dev );
   return 0;
 }
@@ -680,7 +753,7 @@ serial_set_udev_param_field(
   serial_t * serial
 ){
 
-  if( !serial_valid( serial ) )
+  if( !serial_valid( serial, QUICK ) )
     return -1;
 
   if( !field || !length ){
@@ -710,24 +783,20 @@ serial_get_udev_param_value(
   serial_t * serial
 ){
 
-  if( !serial_valid( serial ) || !field ){
+  if( !serial_valid( serial, QUICK ) || !field ){
     errno = EINVAL;
     return NULL;
   }
 
-  serial_id_t id;
-  
-  if( -1 == add_field_id( field, length, &id ) ){
-    error_print( "add_field_id" );
-    return NULL;
-  }
+  size_t _length = NAME_MAX;
+  if( length > NAME_MAX )
+    _length = length; 
+ 
+  for( uint8_t i = 0 ; i < serial->id.ndev ; ++i )
+    if( !strncmp( field, serial->id.dev[i].field, _length ) )
+      return serial->id.dev[i].value;
 
-  if( -1 == get_ids( serial->pathname, &id ) ){
-    error_print( "get_ids" );
-    return NULL;
-  }
-  
-  return strdup( id.dev[0].value );
+  return NULL;
 }
 
 /**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
@@ -736,7 +805,7 @@ serial_event_enable(
   serial_t * serial
 ){
 
-  if( !serial_valid( serial ) )
+  if( !serial_valid( serial, QUICK ) )
     return -1;
 
   for( uint8_t i = 0 ; i < 2 ; ++i ){
@@ -770,7 +839,7 @@ serial_close(
   serial_t * serial
 ){
 
-  if( !serial_valid( serial ) )
+  if( !serial_valid( serial, FULL ) )
     return -1;
 
   if( EOF == fclose( serial->fp ) ){
@@ -813,6 +882,32 @@ serial_default_config(
   return 0;
 }
 
+
+/**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+int8_t 
+_serial_set_baudrate( 
+  const baudrate_t baudrate, 
+  struct termios * tty
+){
+  if( !tty )
+    return -1;
+
+  int result = cfsetispeed( tty, baudrate );
+  if( 0 != result ){
+    error_print( "cfsetispeed" );
+    return -1;
+  }
+
+  result = cfsetospeed( tty, baudrate );
+  if( 0 != result ){
+    error_print( "cfsetospeed" );
+    return -1;
+  }
+
+  return 0;
+}
+
+
 /**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
 int8_t 
 serial_set_baudrate( 
@@ -820,29 +915,55 @@ serial_set_baudrate(
   serial_t * serial
 ){
 
-  if( !serial_valid( serial ) )
+  if( !serial_valid( serial, QUICK ) )
     return -1;
 
   struct termios tty;
   if( !get_termios( serial->fd, &tty ) )
     return -1;
 
-  int result = cfsetispeed( &tty, baudrate );
-  if( 0 != result ){
-    error_print( "cfsetispeed" );
+  int8_t ret = _serial_set_baudrate( baudrate, &tty );
+  if( -1 == ret )
     return -1;
-  }
 
-  result = cfsetospeed( &tty, baudrate );
-  if( 0 != result ){
-    error_print( "cfsetospeed" );
-    return -1;
-  }
-  
   if( !apply_termios( serial->fd, &tty ) )
     return -1;
-
+  
   serial->config.baudrate = baudrate;
+  return 0;
+}
+
+/**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+int8_t 
+_serial_set_parity( 
+  const parity_t parity, 
+  struct termios * tty
+){
+  if( !tty )
+    return -1;
+
+  switch( parity ){
+    default:
+      errno = EINVAL;
+      return -1;
+      
+    case BPARITY_NONE:
+      tty->c_cflag &= (tcflag_t) ~(PARENB);                                    // Disable parity (Clear bit)
+      tty->c_iflag &= (tcflag_t) ~(INPCK);                                     // Disable parity checking
+      break;
+    
+    case BPARITY_ODD:
+      tty->c_cflag |= (tcflag_t) (PARENB) | (PARODD);                          // Enable parity (Set bit) and Enable odd parity
+      tty->c_iflag |= (tcflag_t) (INPCK);                                      // Enable parity checking
+      break;
+
+    case BPARITY_EVEN:
+      tty->c_cflag |= (tcflag_t) (PARENB);                                     // Enable parity (Set bit)
+      tty->c_cflag &= (tcflag_t) ~(PARODD);                                    // Enable even parity
+      tty->c_iflag |= (tcflag_t) (INPCK);                                      // Enable parity checking
+      break;
+  }
+
   return 0;
 }
 
@@ -853,39 +974,48 @@ serial_set_parity(
   serial_t * serial
 ){
 
-  if( !serial_valid( serial ) )
+  if( !serial_valid( serial, QUICK ) )
     return -1;
 
   struct termios tty;
   if( !get_termios( serial->fd, &tty ) )
     return -1;
+
+  int8_t ret = _serial_set_parity( parity, &tty );
+  if( -1 == ret )
+    return -1;
   
-  switch( parity ){
-    default:
-      errno = EINVAL;
-      return -1;
-      
-    case BPARITY_NONE:
-      tty.c_cflag &= (tcflag_t) ~(PARENB);                                    // Disable parity (Clear bit)
-      tty.c_iflag &= (tcflag_t) ~(INPCK);                                     // Disable parity checking
-      break;
-    
-    case BPARITY_ODD:
-      tty.c_cflag |= (tcflag_t) (PARENB) | (PARODD);                          // Enable parity (Set bit) and Enable odd parity
-      tty.c_iflag |= (tcflag_t) (INPCK);                                      // Enable parity checking
-      break;
-
-    case BPARITY_EVEN:
-      tty.c_cflag |= (tcflag_t) (PARENB);                                     // Enable parity (Set bit)
-      tty.c_cflag &= (tcflag_t) ~(PARODD);                                    // Enable even parity
-      tty.c_iflag |= (tcflag_t) (INPCK);                                      // Enable parity checking
-      break;
-  }
-
   if( !apply_termios( serial->fd, &tty ) )
     return -1;
 
   serial->config.parity = parity;
+  return 0;
+}
+
+/**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+int8_t 
+_serial_set_stopbits( 
+  const stop_bits_t stop_bits, 
+  struct termios * tty
+){
+
+  if( !tty )
+    return -1;
+
+  switch( stop_bits ){
+    default:
+      errno = EINVAL;
+      return -1;
+
+    case STOP_BITS_1:
+      tty->c_cflag &= (tcflag_t) ~(CSTOPB);                                    // Set 1 stop bit 
+      break;
+
+    case STOP_BITS_2:      
+      tty->c_cflag |= (tcflag_t) (CSTOPB);                                     // Set 2 stop bits
+      break;
+  }
+
   return 0;
 }
 
@@ -896,31 +1026,36 @@ serial_set_stopbits(
   serial_t * serial
 ){
 
-  if( !serial_valid( serial ) )
+  if( !serial_valid( serial, QUICK ) )
     return -1;
 
   struct termios tty;
   if( !get_termios( serial->fd, &tty ) )
     return -1;
 
-  switch( stop_bits ){
-    default:
-      errno = EINVAL;
-      return -1;
-
-    case STOP_BITS_1:
-      tty.c_cflag &= (tcflag_t) ~(CSTOPB);                                    // Set 1 stop bit 
-      break;
-
-    case STOP_BITS_2:      
-      tty.c_cflag |= (tcflag_t) (CSTOPB);                                     // Set 2 stop bits
-      break;
-  }
+  int8_t ret = _serial_set_stopbits( stop_bits, &tty );
+  if( -1 == ret )
+    return -1;
 
   if( !apply_termios( serial->fd, &tty ) )
     return -1;
 
   serial->config.stop_bits = stop_bits;
+  return 0;
+}
+
+/**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+int8_t 
+_serial_set_databits( 
+  const data_bits_t data_bits, 
+  struct termios * tty
+){
+  if( !tty )
+    return -1;
+  
+  tty->c_cflag &= (tcflag_t) ~CSIZE;                                          // Clear all the size bits, then use one of the statements below
+  tty->c_cflag |= (tcflag_t) data_bits;                                       // Bits per word
+
   return 0;
 }
 
@@ -931,20 +1066,60 @@ serial_set_databits(
   serial_t * serial
 ){
   
-  if( !serial_valid( serial ) )
+  if( !serial_valid( serial, QUICK ) )
     return -1;
 
   struct termios tty;
   if( !get_termios( serial->fd, &tty ) )
     return -1;
 
-  tty.c_cflag &= (tcflag_t) ~CSIZE;                                          // Clear all the size bits, then use one of the statements below
-  tty.c_cflag |= (tcflag_t) data_bits;                                       // Bits per word
+  int8_t ret = _serial_set_databits( data_bits, &tty );
+  if( -1 == ret )
+    return -1;
 
   if( !apply_termios( serial->fd, &tty ) )
     return -1;
 
   serial->config.data_bits = data_bits;
+  return 0;
+}
+
+/**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+int8_t 
+_serial_set_flowcontrol( 
+  const flow_control_t flow_control, 
+  struct termios * tty
+){
+  if( !tty )
+    return -1;
+
+  switch( flow_control ){
+    default:
+      errno = EINVAL;
+      return -1;
+
+    case FLOWCONTROL_NONE:
+      tty->c_iflag &= (tcflag_t) ~(IXON | IXOFF | IXANY);
+      tty->c_cflag &= (tcflag_t) ~(CRTSCTS);
+      tty->c_cc[VSTART] = 0;                                                   // Disable start character (XON) - disable software flow control
+      tty->c_cc[VSTOP] = 0;                                                    // Disable stop character (XOFF) - disable software flow control
+      break;
+
+    case FLOWCONTROL_HARDWARE:
+      tty->c_iflag &= (tcflag_t) ~(IXON | IXOFF | IXANY);
+      tty->c_cflag |= (tcflag_t) (CRTSCTS);
+      tty->c_cc[VSTART] = 0;                                                   // Disable start character (XON) - disable software flow control
+      tty->c_cc[VSTOP] = 0;                                                    // Disable stop character (XOFF) - disable software flow control
+      break;
+    
+    case FLOWCONTROL_SOFTWARE:
+      tty->c_iflag |= (tcflag_t) (IXON | IXOFF | IXANY);
+      tty->c_cflag &= (tcflag_t) ~(CRTSCTS);
+      tty->c_cc[VSTART] = 1;                                                   // Enable start character (XON) - enable software flow control
+      tty->c_cc[VSTOP] = 1;                                                    // Enable stop character (XOFF) - enable software flow control
+      break;
+  }
+
   return 0;
 }
 
@@ -955,44 +1130,53 @@ serial_set_flowcontrol(
   serial_t * serial
 ){
 
-  if( !serial_valid( serial ) )
+  if( !serial_valid( serial, QUICK ) )
     return -1;
 
   struct termios tty;
   if( !get_termios( serial->fd, &tty ) )
     return -1;
 
-  switch( flow_control ){
-    default:
-      errno = EINVAL;
-      return -1;
-
-    case FLOWCONTROL_NONE:
-      tty.c_iflag &= (tcflag_t) ~(IXON | IXOFF | IXANY);
-      tty.c_cflag &= (tcflag_t) ~(CRTSCTS);
-      tty.c_cc[VSTART] = 0;                                                   // Disable start character (XON) - disable software flow control
-      tty.c_cc[VSTOP] = 0;                                                    // Disable stop character (XOFF) - disable software flow control
-      break;
-
-    case FLOWCONTROL_HARDWARE:
-      tty.c_iflag &= (tcflag_t) ~(IXON | IXOFF | IXANY);
-      tty.c_cflag |= (tcflag_t) (CRTSCTS);
-      tty.c_cc[VSTART] = 0;                                                   // Disable start character (XON) - disable software flow control
-      tty.c_cc[VSTOP] = 0;                                                    // Disable stop character (XOFF) - disable software flow control
-      break;
-    
-    case FLOWCONTROL_SOFTWARE:
-      tty.c_iflag |= (tcflag_t) (IXON | IXOFF | IXANY);
-      tty.c_cflag &= (tcflag_t) ~(CRTSCTS);
-      tty.c_cc[VSTART] = 1;                                                   // Enable start character (XON) - enable software flow control
-      tty.c_cc[VSTOP] = 1;                                                    // Enable stop character (XOFF) - enable software flow control
-      break;
-  }
+  int8_t ret = _serial_set_flowcontrol( flow_control, &tty );
+  if( -1 == ret )
+    return -1;
 
   if( !apply_termios( serial->fd, &tty ) )
     return -1;
 
   serial->config.flow_control = flow_control;
+  return 0;
+}
+
+/**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+int8_t 
+_serial_set_rule( 
+  const uint8_t timeout, 
+  const uint8_t min, 
+  struct termios * tty
+){
+  if( !tty )
+    return -1;
+
+  cfmakeraw( tty );
+  memset( &tty->c_cc, 0, sizeof( cc_t ) * NCCS );
+
+  tty->c_cc[VEOF]     = 4;                                                     // Set EOF character to EOT (Ctrl+D, ASCII 4) - or 0 if not used
+  tty->c_cc[VTIME]    = timeout;                                               // Set timeout for read() in tenths of a second
+  tty->c_cc[VMIN]     = min;                                                   // Set minimum number of bytes for read() to return
+  tty->c_cc[VINTR]    = 0;                                                     // Disable interrupt character (Ctrl+C)
+  tty->c_cc[VQUIT]    = 0;                                                     // Disable quit character (Ctrl+\)
+  tty->c_cc[VSUSP]    = 0;                                                     // Disable suspend character (Ctrl+Z)
+  // tty->c_cc[VERASE]   = 0;                                                  // Disable erase character (backspace) - not relevant in raw mode
+  // tty->c_cc[VKILL]    = 0;                                                  // Disable kill character (Ctrl+U) - not relevant in raw mode
+  // tty->c_cc[VSWTC]    = 0;                                                  // Disable switch character - not usually needed
+  // tty->c_cc[VEOL]     = 0;                                                  // Disable end-of-line character - not relevant in raw mode
+  // tty->c_cc[VREPRINT] = 0;                                                  // Disable reprint character - not relevant in raw mode
+  // tty->c_cc[VDISCARD] = 0;                                                  // Disable discard character - not relevant in raw mode
+  // tty->c_cc[VWERASE]  = 0;                                                  // Disable word erase character - not relevant in raw mode
+  // tty->c_cc[VLNEXT]   = 0;                                                  // Disable literal next character - not relevant in raw mode
+  // tty->c_cc[VEOL2]    = 0;                                                  // Disable alternate end-of-line character - not relevant in raw mode
+
   return 0;
 }
 
@@ -1004,31 +1188,16 @@ serial_set_rule(
   serial_t * serial
 ){
 
-  if( !serial_valid( serial ) )
+  if( !serial_valid( serial, QUICK ) )
     return -1;
 
   struct termios tty;
   if( !get_termios( serial->fd, &tty ) )
     return -1;
 
-  cfmakeraw( &tty );
-  memset( &tty.c_cc, 0, sizeof( cc_t ) * NCCS );
-
-  tty.c_cc[VEOF]     = 4;                                                     // Set EOF character to EOT (Ctrl+D, ASCII 4) - or 0 if not used
-  tty.c_cc[VTIME]    = timeout;                                               // Set timeout for read() in tenths of a second
-  tty.c_cc[VMIN]     = min;                                                   // Set minimum number of bytes for read() to return
-  tty.c_cc[VINTR]    = 0;                                                     // Disable interrupt character (Ctrl+C)
-  tty.c_cc[VQUIT]    = 0;                                                     // Disable quit character (Ctrl+\)
-  tty.c_cc[VSUSP]    = 0;                                                     // Disable suspend character (Ctrl+Z)
-  // tty.c_cc[VERASE]   = 0;                                                  // Disable erase character (backspace) - not relevant in raw mode
-  // tty.c_cc[VKILL]    = 0;                                                  // Disable kill character (Ctrl+U) - not relevant in raw mode
-  // tty.c_cc[VSWTC]    = 0;                                                  // Disable switch character - not usually needed
-  // tty.c_cc[VEOL]     = 0;                                                  // Disable end-of-line character - not relevant in raw mode
-  // tty.c_cc[VREPRINT] = 0;                                                  // Disable reprint character - not relevant in raw mode
-  // tty.c_cc[VDISCARD] = 0;                                                  // Disable discard character - not relevant in raw mode
-  // tty.c_cc[VWERASE]  = 0;                                                  // Disable word erase character - not relevant in raw mode
-  // tty.c_cc[VLNEXT]   = 0;                                                  // Disable literal next character - not relevant in raw mode
-  // tty.c_cc[VEOL2]    = 0;                                                  // Disable alternate end-of-line character - not relevant in raw mode
+  int8_t ret = _serial_set_rule( timeout, min, &tty );
+  if( -1 == ret )
+    return -1;
 
   if( !apply_termios( serial->fd, &tty ) )
     return -1;
@@ -1045,7 +1214,7 @@ serial_set_timeout(
   serial_t * serial
 ){
 
-  if( !serial_valid( serial ) )
+  if( !serial_valid( serial, QUICK ) )
     return -1;
   
   serial->config.event_timeout_ms = timeout;
@@ -1066,36 +1235,42 @@ serial_set_config(
     return -1;
   }
 
-  if( !serial_valid( serial ) )
+  if( !serial_valid( serial, QUICK ) )
     return -1;
 
-  if( -1 == serial_set_baudrate( config->baudrate, serial ) ){
-    error_print( "serial_set_baudrate" );
-    return -1;
-  }
-
-  if( -1 == serial_set_parity( config->parity, serial ) ){
-    error_print( "serial_set_parity" );
+  struct termios tty;
+  if( !get_termios( serial->fd, &tty ) ){
+    error_print( "get_termios" );
     return -1;
   }
 
-  if( -1 == serial_set_stopbits( config->stop_bits, serial ) ){
-    error_print( "serial_set_stopbits" );
+  if( -1 == _serial_set_baudrate( config->baudrate, &tty ) ){
+    error_print( "_serial_set_baudrate" );
     return -1;
   }
 
-  if( -1 == serial_set_databits( config->data_bits, serial ) ){
-    error_print( "serial_set_databits" );
+  if( -1 == _serial_set_parity( config->parity, &tty ) ){
+    error_print( "_serial_set_parity" );
+    return -1;
+  }
+
+  if( -1 == _serial_set_stopbits( config->stop_bits, &tty ) ){
+    error_print( "_serial_set_stopbits" );
+    return -1;
+  }
+
+  if( -1 == _serial_set_databits( config->data_bits, &tty ) ){
+    error_print( "_serial_set_databits" );
     return -1;
   }
       
-  if( -1 == serial_set_flowcontrol( config->flow_control, serial ) ){
-    error_print( "serial_set_flowcontrol" );
+  if( -1 == _serial_set_flowcontrol( config->flow_control, &tty ) ){
+    error_print( "_serial_set_flowcontrol" );
     return -1;
   }
   
-  if( -1 == serial_set_rule( config->timeout_ds, config->min_bytes, serial ) ){
-    error_print( "serial_set_rule" );
+  if( -1 == _serial_set_rule( config->timeout_ds, config->min_bytes, &tty ) ){
+    error_print( "_serial_set_rule" );
     return -1;
   }
 
@@ -1104,7 +1279,11 @@ serial_set_config(
     return -1;
   }
 
-  serial_get_config( serial );
+  if( !apply_termios( serial->fd, &tty ) ){
+    error_print( "apply_termios" );
+    return -1;
+  }
+
   return 0;
 }
 
@@ -1183,7 +1362,7 @@ serial_readline(
     return 0;
   }
 
-  if( !serial_valid( serial ) )
+  if( !serial_valid( serial, QUICK ) )
     return 0;
 
   if( size <= offset ){
@@ -1234,7 +1413,7 @@ serial_read(
     return 0;
   }
 
-  if( !serial_valid( serial ) )
+  if( !serial_valid( serial, QUICK ) )
     return 0;
   
   if( size < (offset + length) ){
@@ -1340,7 +1519,7 @@ serial_write(
     return 0;
   }
 
-  if( !serial_valid( serial ) )
+  if( !serial_valid( serial, QUICK ) )
     return 0;
 
   size_t size = _serial_write( serial, data, len );
@@ -1348,8 +1527,8 @@ serial_write(
   if( size < len )
     return (size_t) fs_error( serial, size );
 
-  if( -1 == serial_flush( serial ) )
-    return (size_t) fs_error( serial, 0 );
+  // if( -1 == serial_flush( serial ) )
+  //   return (size_t) fs_error( serial, 0 );
     
   return size;
 }
@@ -1368,7 +1547,7 @@ serial_writef(
     return 0;
   }
 
-  if( !serial_valid( serial ) )
+  if( !serial_valid( serial, QUICK ) )
     return 0;
 
   va_list args;
@@ -1395,8 +1574,8 @@ serial_writef(
   if( size < (size_t) len )
     return (size_t) fs_error( serial, size );
 
-  if( -1 == serial_flush( serial ) )
-    return (size_t) fs_error( serial, size );
+  // if( -1 == serial_flush( serial ) )
+  //   return (size_t) fs_error( serial, size );
 
   return size;
 }
@@ -1404,7 +1583,8 @@ serial_writef(
 /**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
 uint8_t 
 serial_valid( 
-  const serial_t * serial
+  const serial_t * serial,
+  const serial_check_t check 
 ){
 
   if( !serial ){
@@ -1418,7 +1598,7 @@ serial_valid(
     return 0;
   }
 
-  if( -1 == fcntl( serial->fd, F_GETFD ) ){
+  if( (FULL == check) && -1 == fcntl( serial->fd, F_GETFD ) ){
     errno = EBADF;
     return 0;
   }   
@@ -1432,7 +1612,7 @@ serial_drain(
   const serial_t * serial
 ){
 
-  if( !serial_valid( serial ) )
+  if( !serial_valid( serial, QUICK ) )
     return -1;
   
   if( -1 == tcdrain( serial->fd ) ){
@@ -1449,7 +1629,7 @@ serial_flush(
   const serial_t * serial
 ){
 
-  if( !serial_valid( serial ) )
+  if( !serial_valid( serial, QUICK ) )
     return -1;
 
   int8_t err = 0;
@@ -1477,7 +1657,7 @@ serial_available(
   const serial_t * serial
 ){
 
-  if( !serial_valid( serial ) )
+  if( !serial_valid( serial, QUICK ) )
     return 0;
   
   int32_t len;
@@ -1502,7 +1682,7 @@ serial_event_wait(
   const serial_direction_t side
 ){
 
-  if( !serial_valid( serial ) )
+  if( !serial_valid( serial, QUICK ) )
     return -1;
 
   struct epoll_event ev;
@@ -1550,7 +1730,7 @@ serial_set_line_state(
   const serial_t * serial
 ){
 
-  if( !serial_valid( serial ) )
+  if( !serial_valid( serial, QUICK ) )
     return -1;
 
   int status;
@@ -1580,7 +1760,7 @@ serial_get_line_state(
   const serial_t * serial
 ){
 
-  if( !serial_valid( serial ) )
+  if( !serial_valid( serial, QUICK ) )
     return -1;
 
   int status;
@@ -1600,16 +1780,20 @@ serial_get_config(
   serial_t * serial
 ){
 
-  if( !serial_valid( serial ) )
+  if( !serial_valid( serial, QUICK ) )
     return -1;
-  
-  (void) serial_get_baudrate( &(serial->config.baudrate), serial );
-  (void) serial_get_parity( &(serial->config.parity), serial );
-  (void) serial_get_databits( &(serial->config.data_bits), serial );
-  (void) serial_get_stopbits( &(serial->config.stop_bits), serial );
-  (void) serial_get_flowcontrol( &(serial->config.flow_control), serial );
-  (void) serial_get_rule( &(serial->config.timeout_ds), &serial->config.min_bytes, serial ); 
-  (void) serial_get_event_timeout( &(serial->config.event_timeout_ms), serial );
+
+  struct termios tty;
+  if( !get_termios( serial->fd, &tty ) )
+    return -1;
+    
+  (void) serial_get_baudrate( &tty, serial );
+  (void) serial_get_parity( &tty, serial );
+  (void) serial_get_databits( &tty, serial );
+  (void) serial_get_stopbits( &tty, serial );
+  (void) serial_get_flowcontrol( &tty, serial );
+  (void) serial_get_rule( &tty, serial ); 
+  (void) serial_get_event_timeout( serial );
   return 0;
 }          
 
@@ -1618,55 +1802,46 @@ const char *
 serial_print_config( 
   uint8_t out, 
   const char * initial, 
-  const serial_t * serial
+  serial_t * serial
 ){
 
-  if( !serial_valid( serial ) )
+  if( !serial_valid( serial, QUICK ) )
     return NULL;
   
-  const size_t size = PATH_MAX + 1;
-  char * output = (char *) malloc( size );
-  if( !output ){
-    errno = ENOMEM;
-    error_print( "malloc" );
+  struct termios tty;
+  if( !get_termios( serial->fd, &tty ) )
     return NULL;
-  }
-  
-  int len = snprintf( output, size, 
-                    "%sSerial Port %s Configuration\n"
-                    "%sBaud Rate: %s [bps]\n"
-                    "%sParity: %s\n"
-                    "%sData Bits: %s [b]\n"
-                    "%sStop Bits: %s [b]\n"
-                    "%sFlow Control: %s\n"
-                    "%sTimeout, Minimum Number Bytes: %s [ds, B]\n"
-                    "%sEvent timeout: %s [ms]\n"
-                    "%sBus type: %s\n",
-                    initial, serial->pathname, 
-                    initial, serial_get_baudrate(NULL, serial),
-                    initial, serial_get_parity(NULL, serial),
-                    initial, serial_get_databits(NULL, serial), 
-                    initial, serial_get_stopbits(NULL, serial),
-                    initial, serial_get_flowcontrol(NULL, serial),
-                    initial, serial_get_rule(NULL, NULL, serial),
-                    initial, serial_get_event_timeout(NULL, serial),
-                    initial, serial->id.bus
+
+  memset( serial->resv1, 0, sizeof(serial->resv1) );
+  int len = snprintf( 
+    serial->resv1, sizeof(serial->resv1), 
+    "%sSerial Port %s Configuration\n"
+    "%sBaud Rate: %s [bps]\n"
+    "%sParity: %s\n"
+    "%sData Bits: %s [b]\n"
+    "%sStop Bits: %s [b]\n"
+    "%sFlow Control: %s\n"
+    "%sTimeout, Minimum Number Bytes: %s [ds, B]\n"
+    "%sEvent timeout: %s [ms]\n"
+    "%sBus type: %s\n",
+    initial, serial->pathname, 
+    initial, serial_get_baudrate( &tty, serial ),
+    initial, serial_get_parity( &tty, serial ),
+    initial, serial_get_databits( &tty, serial ), 
+    initial, serial_get_stopbits( &tty, serial ),
+    initial, serial_get_flowcontrol( &tty, serial ),
+    initial, serial_get_rule( &tty, serial ),
+    initial, serial_get_event_timeout( serial ),
+    initial, serial->id.bus
   );
-
+  
   for( uint8_t i = 0 ; i < serial->id.ndev ; ++i )
-    len += snprintf( output + len, size - (size_t) len, "%s%s: %s\n", initial, serial->id.dev[i].field, serial->id.dev[i].value );
-
-  char * r = (char *) realloc( output, (size_t) len + 1 );
-  if( !r ){
-    free( output );
-    error_print( "realloc" );
-    return NULL;
-  }
+    len += snprintf( serial->resv1 + len, sizeof(serial->resv1) - (size_t) len, "%s%s: %s\n", initial, serial->id.dev[i].field, serial->id.dev[i].value );
 
   if( out ) 
-    printf( "%s\n", r );
+    printf( "%s\n", serial->resv1 );
 
-  return r;
+  return serial->resv1;
 }
 
 /**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
@@ -1759,204 +1934,231 @@ get_stop_bits_from_code(
 }
 
 /**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+baudrate_t 
+_serial_get_baudrate( 
+  struct termios * tty
+){
+  if( !tty )
+    return _BINV;
+  return cfgetospeed( tty );
+}
+
+
+/**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
 const char * 
 serial_get_baudrate( 
-  baudrate_t * baudrate, 
-  const serial_t * serial
+  struct termios * tty,
+  serial_t * serial
 ){
 
-  if( !serial ){
-    errno = EINVAL;
+  if( !serial_valid( serial, QUICK ) )
     return NULL;
+
+  if( !tty ){   
+    struct termios ltty;
+    if( !get_termios( serial->fd, &ltty ) )
+      return NULL;
+    serial->config.baudrate = _serial_get_baudrate( &ltty );
   }
+  else
+    serial->config.baudrate = _serial_get_baudrate( tty );
+    
+  return get_baudrate_from_code( serial->config.baudrate );
+}
 
-  struct termios tty;
-  if( !get_termios( serial->fd, &tty ) )
-    return NULL;
+/**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+parity_t 
+_serial_get_parity( 
+  struct termios * tty 
+){
+
+  if( !tty )
+    return _BPARITY_INV;
+
+  if( !( tty->c_iflag & (tcflag_t) INPCK ) )
+    return BPARITY_NONE;
   
-  const baudrate_t br = cfgetospeed( &tty );
-  if( NULL != baudrate )
-    *baudrate = br;      
+  if( !( tty->c_cflag & (tcflag_t) PARODD ) )
+    return BPARITY_EVEN;
 
-  return get_baudrate_from_code( br );
+  return BPARITY_ODD;
+    
 }
 
 /**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
 const char * 
 serial_get_parity( 
-  parity_t * parity, 
-  const serial_t * serial
+  struct termios * tty,
+  serial_t * serial
 ){
 
-  if( !serial ){
-    errno = EINVAL;
+  if( !serial_valid( serial, QUICK ) )
     return NULL;
+
+  if( !tty ){   
+    struct termios ltty;
+    if( !get_termios( serial->fd, &ltty ) )
+      return NULL;
+    serial->config.parity = _serial_get_parity( &ltty );
   }
+  else
+    serial->config.parity = _serial_get_parity( tty );
 
-  struct termios tty;
-  if( !get_termios( serial->fd, &tty ) )
-    return NULL;
-  
-  if( !( tty.c_iflag & (tcflag_t) INPCK ) ){
-    if( NULL != parity )
-      *parity = BPARITY_NONE;
-    return get_parity_from_code( BPARITY_NONE );
-  } 
-  
-  if( !( tty.c_cflag & (tcflag_t) PARODD ) ){
-    if( NULL != parity )
-      *parity = BPARITY_EVEN;
-    return get_parity_from_code( BPARITY_EVEN );
-  } 
+  return get_parity_from_code( serial->config.parity );  
+}
 
-  if( NULL != parity )
-    *parity = BPARITY_ODD;    
+/**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+stop_bits_t 
+_serial_get_stopbits( 
+  struct termios * tty
+){
+  if( !tty )
+    return _STOP_BITS_INV;
 
-  return get_parity_from_code( BPARITY_ODD );
+  if( !( tty->c_iflag & (tcflag_t) CSTOPB ) )
+    return STOP_BITS_1;
+
+  return STOP_BITS_2;
 }
 
 /**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
 const char * 
 serial_get_stopbits( 
-  stop_bits_t * stop_bits, 
-  const serial_t * serial
+  struct termios * tty,
+  serial_t * serial
 ){
 
-  if( !serial ){
-    errno = EINVAL;
-    return NULL;
-  }
-
-  struct termios tty;
-  if( !get_termios( serial->fd, &tty ) )
+  if( !serial_valid( serial, QUICK ) )
     return NULL;
 
-  if( !( tty.c_iflag & (tcflag_t) CSTOPB ) ){
-    if( NULL != stop_bits )
-      *stop_bits = STOP_BITS_1;
-    return get_stop_bits_from_code( STOP_BITS_1 );
+  if( !tty ){
+    struct termios ltty;
+    if( !get_termios( serial->fd, &ltty ) )
+      return NULL;
+    serial->config.stop_bits = _serial_get_stopbits( &ltty ); 
   }
+  else
+    serial->config.stop_bits = _serial_get_stopbits( tty ); 
 
-  if( NULL != stop_bits )
-    *stop_bits = STOP_BITS_2;
-  return get_stop_bits_from_code( STOP_BITS_1 );
+  return get_stop_bits_from_code( serial->config.stop_bits );
+}
+
+/**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+data_bits_t 
+_serial_get_databits( 
+  struct termios * tty
+){
+  if( !tty )
+    return _DATA_BITS_INV;
+
+  return tty->c_cflag & (tcflag_t) CSIZE;
 }
 
 /**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
 const char * 
 serial_get_databits( 
-  data_bits_t * data_bits, 
-  const serial_t * serial
+  struct termios * tty,
+  serial_t * serial
 ){
 
-  if( !serial ){
-    errno = EINVAL;
+  if( !serial_valid( serial, QUICK ) )
     return NULL;
+
+  if( !tty ){
+    struct termios ltty;
+    if( !get_termios( serial->fd, &ltty ) )
+      return NULL;
+
+    serial->config.data_bits = _serial_get_databits( &ltty );
+  }
+  else
+    serial->config.data_bits = _serial_get_databits( tty );
+  
+  return get_data_bits_from_code( serial->config.data_bits );
+}
+
+/**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+flow_control_t 
+_serial_get_flowcontrol( 
+  struct termios * tty
+){
+  if( !tty )
+    return _FLOWCONTROL_INV;
+  
+  if( !(tty->c_cflag & (tcflag_t) CRTSCTS) ){
+    if( !(tty->c_iflag & (tcflag_t) (IXON | IXOFF | IXANY) ) )
+      return FLOWCONTROL_NONE;
+    else
+      return FLOWCONTROL_SOFTWARE;
   }
 
-  struct termios tty;
-  if( !get_termios( serial->fd, &tty ) )
-    return NULL;
-
-  tcflag_t _data_bits = tty.c_cflag & (tcflag_t) CSIZE;
-  if( NULL != data_bits ) 
-    *data_bits = _data_bits;
-  return get_data_bits_from_code( _data_bits );
+  return FLOWCONTROL_HARDWARE;
 }
 
 /**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
 const char * 
 serial_get_flowcontrol( 
-  flow_control_t * flow_control, 
-  const serial_t * serial
+  struct termios * tty,
+  serial_t * serial
 ){
 
-  if( !serial ){
-    errno = EINVAL;
-    return NULL;
-  }
-
-  struct termios tty;
-  if( !get_termios( serial->fd, &tty ) )
+  if( !serial_valid( serial, QUICK ) )
     return NULL;
 
-  if( !(tty.c_cflag & (tcflag_t) CRTSCTS) ){
-    if( !(tty.c_iflag & (tcflag_t) (IXON | IXOFF | IXANY) ) ){
-      if( NULL != flow_control )
-        *flow_control = FLOWCONTROL_NONE;
-      return get_flow_control_from_code( FLOWCONTROL_NONE );
-    }
-
-    if( NULL != flow_control )
-      *flow_control = FLOWCONTROL_SOFTWARE;
-    return get_flow_control_from_code( FLOWCONTROL_SOFTWARE );
+  if( !tty ){
+    struct termios ltty;
+    if( !get_termios( serial->fd, &ltty ) )
+      return NULL;
+    
+    serial->config.flow_control = _serial_get_flowcontrol( &ltty );
   }
+  else
+    serial->config.flow_control = _serial_get_flowcontrol( tty );
 
-  if( NULL != flow_control )
-    *flow_control = FLOWCONTROL_HARDWARE;
-  return get_flow_control_from_code( FLOWCONTROL_HARDWARE );
+  return get_flow_control_from_code( serial->config.flow_control );
 }
 
 /**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
 const char * 
 serial_get_rule( 
-  uint8_t * timeout, 
-  uint8_t * min, 
-  const serial_t * serial
+  struct termios * tty,
+  serial_t * serial
 ){
 
-  if( !serial ){
-    errno = EINVAL;
+  if( !serial_valid( serial, QUICK ) )
     return NULL;
+ 
+  if( !tty ){
+    struct termios ltty;
+    if( !get_termios( serial->fd, &ltty ) )
+      return NULL;
+
+    serial->config.timeout_ds = ltty.c_cc[VTIME];
+    serial->config.min_bytes = ltty.c_cc[VMIN];
+  }
+  else {
+    serial->config.timeout_ds = tty->c_cc[VTIME];
+    serial->config.min_bytes = tty->c_cc[VMIN];
   }
 
-  const size_t txt_len = 16;
-  char * txr_repre = ( char * ) malloc( txt_len );
-  if( !txr_repre ){
-    errno = ENOMEM;
-    error_print( "malloc" );
-    return NULL;
-  } 
-
-  struct termios tty;
-  if( !get_termios( serial->fd, &tty ) )
-    return NULL;
-  
-  if( NULL != timeout )
-    *timeout = tty.c_cc[VTIME];
-  if( NULL != min )
-    *min = tty.c_cc[VMIN];
-
-  snprintf( txr_repre, txt_len, "%hhd, %hhd", serial->config.timeout_ds, serial->config.min_bytes );
-  return txr_repre;
+  memset( serial->resv2, 0, sizeof(serial->resv2) );
+  snprintf( serial->resv2, sizeof(serial->resv2), "%hhd, %hhd", serial->config.timeout_ds, serial->config.min_bytes );
+  return serial->resv2;
 }
 
 
 /**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
 const char * 
 serial_get_event_timeout( 
-  int * timeout, 
-  const serial_t * serial
+  serial_t * serial
 ){
 
-  if( !serial ){
-    errno = EINVAL;
+  if( !serial_valid( serial, QUICK ) )
     return NULL;
-  }
 
-  const size_t txt_len = 16;
-  char * txr_repre = ( char * ) malloc( txt_len );
-  if( !txr_repre ){
-    errno = ENOMEM;
-    error_print( "malloc" );
-    return NULL;
-  } 
-
-  if( NULL != timeout )
-    *timeout = serial->config.event_timeout_ms;
-
-  snprintf( txr_repre, txt_len, "%d", serial->config.event_timeout_ms );
-  return txr_repre;
+  memset( serial->resv2, 0, sizeof(serial->resv2) );
+  snprintf( serial->resv2, sizeof(serial->resv2), "%d", serial->config.event_timeout_ms );
+  return serial->resv2;
 }
 
 
@@ -2014,7 +2216,7 @@ fs_error(
     case SERIAL_STDIO: 
       if( feof( serial->fp ) ){
         clearerr( serial->fp );       
-        if( !serial_valid( serial ) )
+        if( !serial_valid( serial, FULL ) )
           errno = ENODEV;
         else
           errno = ETIME;
@@ -2027,7 +2229,7 @@ fs_error(
             
     case SERIAL_POSIX: 
       if( !call_ret ){
-        if( !serial_valid( serial ) )
+        if( !serial_valid( serial, FULL ) )
           errno = ENODEV;
         else
           errno = ETIME;
@@ -2067,7 +2269,7 @@ async_epoll_thread(
   
   serial_t * serial = (serial_t *) arg;
   
-  if( !serial_valid( serial ) )
+  if( !serial_valid( serial, QUICK ) )
     return NULL;
 
   uint8_t buf[ BUFSIZ ];
@@ -2103,7 +2305,7 @@ serial_set_iomode(
   serial_t * serial 
 ){
 
-  if( !serial_valid( serial ) )
+  if( !serial_valid( serial, QUICK ) )
     return -1;
 
   serial->iomode = iomode;    
@@ -2117,7 +2319,7 @@ serial_get_iomode(
   const serial_t * serial
 ){
 
-  if( !serial_valid( serial ) || !iomode )
+  if( !serial_valid( serial, QUICK ) || !iomode )
     return NULL;
 
   *iomode = serial->iomode;  
