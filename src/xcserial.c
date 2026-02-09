@@ -377,6 +377,7 @@ serial_reopen(
   }
 
   serial_id_t id;
+  memset( &id, 0, sizeof(serial_id_t) );
   cpy_fields_ids( &id, &serial->id );
 
   serial_close( serial );
@@ -729,18 +730,19 @@ cpy_fields_ids(
   serial_id_t * dst, 
   const serial_id_t * src
 ){
-  
   if( !src || !dst ){
     errno = EINVAL;
     return -1;
   }
   
-  for( uint8_t i = 0 ; i < src->ndev ; ++i )
+  for( uint8_t i = 0 ; i < src->ndev ; ++i ){
     if( !strncpy( dst->dev[ i + dst->ndev ].field, src->dev[i].field, NAME_MAX ) )
       return -1;
+    if( !strncpy( dst->dev[ i + dst->ndev ].value, src->dev[i].value, NAME_MAX ) )
+      return -1;
+  }
   
   dst->ndev += src->ndev;
-
   return 0;
 }
 
@@ -847,13 +849,15 @@ serial_close(
     return -1;
   }
 
-  if( !serial->async.close ){
-    serial->async.close = 1;
-    if( 0 != pthread_join( serial->async.thread, NULL) ){
-      error_print( "pthread_join" );
-      return -1;
-    }
-  }
+  serial->fp = NULL;
+
+  // if( !serial->async.close ){
+  //   serial->async.close = 1;
+  //   if( 0 != pthread_join( serial->async.thread, NULL) ){
+  //     error_print( "pthread_join" );
+  //     return -1;
+  //   }
+  // }
 
   return 0;
 }
@@ -2254,9 +2258,9 @@ serial_async_set_callback(
   serial->async.dcb = handler_disconnect;
   serial->async.close = 0;
 
-  pthread_attr_t * attr = NULL;
-  if( 0 != pthread_create( &(serial->async.thread), attr, async_epoll_thread, serial ) )
-    return -1;
+  // pthread_attr_t * attr = NULL;
+  // if( 0 != pthread_create( &(serial->async.thread), attr, async_epoll_thread, serial ) )
+  //   return -1;
   
   return 0;
 }
@@ -2282,8 +2286,6 @@ async_epoll_thread(
     
     if( !len ){
       if( (errno == ENODEV) || (errno == EIO) ){        
-        printf("Device got disconnected (%d)%s...\n", serial->fd, serial->pathname );
-
         serial->async.close = 1;
         if( -1 == serial->async.dcb( ) )
           return NULL;
@@ -2296,6 +2298,29 @@ async_epoll_thread(
   }    
 
   return NULL;
+}
+
+/**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+int8_t
+serial_poll( 
+  serial_t * serial 
+){
+
+  if( !serial_valid( serial, QUICK ) )
+    return -1;
+
+  uint8_t buf[ BUFSIZ ];
+  size_t len = serial_read( (char *) buf, sizeof(buf), 0, sizeof(buf)-1, serial );    
+  
+  if( !len && ((errno == ENODEV) || (errno == EIO)) ){
+    serial->async.close = 1;
+    if( -1 == serial->async.dcb( ) )
+      return -1;
+    serial->async.close = 0;
+  }
+
+  serial->async.rcb( buf, len );
+  return 0;  
 }
 
 /**************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/

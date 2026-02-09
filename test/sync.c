@@ -57,7 +57,14 @@ test(
   const uint8_t output = 1;
   if( !serial_print_config( output, "", serial ) ){
     fprintf( stderr, "Failed to retrive data: %d, %s\n", errno, strerror(errno) );
-    return 0;
+    if( (errno == ENODEV) || (errno == EIO) ){
+      if( !handle_disconnect( serial ) )
+        return 0;
+    }
+    else {
+      serial_close( serial );
+      return 0;
+    }
   }
 
   if( wait ){
@@ -167,7 +174,7 @@ main( void ){
   };
   int len_parameters = sizeof( parameters )/sizeof( parameters[0] );
 
-  serial_iomode_t iomodes[] = {SERIAL_POSIX}; 
+  serial_iomode_t iomodes[] = {SERIAL_STDIO}; 
   int dim = sizeof(iomodes)/sizeof(iomodes[0]);
 
   for( int j = 0 ; j < 100 ; ++j ){

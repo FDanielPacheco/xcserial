@@ -159,6 +159,9 @@ int main( void ) {
     if( buffer_length > 0 && !strcmp( (char*)receive_buffer, "PATTERN" ) ){
         // Process received data
     }
+
+    // Polling system
+    serial_poll( &serial );
   }
 }
 ```
