@@ -1,7 +1,7 @@
 # Version
-MAJOR = 1
+MAJOR = 0
 MINOR = 0
-RELEASE = 0
+RELEASE = 1
 
 # LLVM Toolchain
 LLVM_CC = clang
