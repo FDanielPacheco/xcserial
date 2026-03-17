@@ -1,175 +1,100 @@
-# Version
-MAJOR = 0
-MINOR = 0
-RELEASE = 1
+# --- Project Metadata ---
+NAME     = xcserial
+MAJOR    = 0
+MINOR    = 4
+RELEASE  = 0
+VERSION  = $(MAJOR).$(MINOR).$(RELEASE)
 
-# LLVM Toolchain
-LLVM_CC = clang
-LLVM_OPT = opt
-LLC = llc
-LLVM_MC = llvm-mc
-LLVM_LD = clang
-LLVM_AR = llvm-ar
+# --- Toolchain Discovery ---
+CC      = clang
+AR      = llvm-ar
+STRIP   = llvm-strip
+PKG_CON = pkg-config
 
-# Flags
-CFLAGS = -I/usr/local/include 
-CFLAGS += -Wall -Wextra -Wpedantic -Wshadow -Wconversion -g -Iinclude -Wno-gnu-zero-variadic-macro-arguments -O2
-ASM_FLAGS = $(CFLAGS)
-OPT_FLAGS = -O2 -strip-debug
-LD_FLAGS = 
-LD_LIB += -lc -lpthread -ludev
+# --- Arch Lookup ---
+TRIPLE_x86_64  = x86_64-linux-gnu
+TRIPLE_arm     = arm-linux-gnueabihf
+TRIPLE_aarch64 = aarch64-linux-gnu
 
-# Source and build directories
-SRC_DIR = src
-BUILD_DIR = build
-LLVM_IR_DIR = $(BUILD_DIR)/llvm_ir
-ASM_DIR = $(BUILD_DIR)/asm
+# Default choice
+ARCH ?= x86_64
+TARGET_TRIPLE := $(TRIPLE_$(ARCH))
+ifeq ($(TARGET_TRIPLE),)
+$(error Invalid ARCH '$(ARCH)'. Supported: x86_64, arm, aarch64)
+endif
 
-# Documentation
-DOCS_DIR = docs
+# --- Paths ---
+SRC_DIR   = src
+INC_DIR   = include
+BUILD_DIR = build/$(TARGET_TRIPLE)
+OUT_DIR   = release/$(TARGET_TRIPLE)
 
-# Test 
-TEST_DIR = test
-TESTS = sync async systrace
-TEST_BINS = $(addprefix $(BUILD_DIR)/, $(TESTS))
+# --- Compiler Flags (GDB Friendly) ---
+# -Og: Optimize for debugging experience
+# -ggdb3: Include maximum GDB-specific debug info
+# -fPIC: Needed for shared libraries
+CFLAGS  = -std=gnu99 -fPIC -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Werror -Wno-gnu-zero-variadic-macro-arguments
+CFLAGS += -I$(INC_DIR) -Og -ggdb3 -D_GNU_SOURCE
+CFLAGS += --target=$(TARGET_TRIPLE)
+LDFLAGS = -shared -Wl,-soname,lib$(NAME).so.$(MAJOR) --target=$(TARGET_TRIPLE)
+LIBS    = -ludev
 
-# --- Target 1: xcserial ---
-TARGET1_NAME = xcserial
-TARGET1_SRC = $(SRC_DIR)/$(TARGET1_NAME).c
-TARGET1_LL = $(LLVM_IR_DIR)/$(TARGET1_NAME).ll
-TARGET1_S = $(ASM_DIR)/$(TARGET1_NAME).s
-TARGET1_OBJ = $(BUILD_DIR)/$(TARGET1_NAME).o
-TARGET1_A = $(BUILD_DIR)/lib$(TARGET1_NAME).a
-TARGET1_SO = $(BUILD_DIR)/lib$(TARGET1_NAME).so
+# --- Target Files ---
+OBJ       = $(BUILD_DIR)/$(NAME).o
+LIB_A     = $(BUILD_DIR)/lib$(NAME).a
+LIB_SO    = $(BUILD_DIR)/lib$(NAME).so.$(VERSION)
+PC_FILE   = $(BUILD_DIR)/$(NAME).pc
 
-# --- Documentation arguments ---
-PROJECT_NAME = $(TARGET1_NAME)
-PROJECT_NAME_BRIEF = "A C serial port library for Linux (lib$(PROJECT_NAME))"
-PROJECT_BRIEF = "$(PROJECT_NAME) is a lightweight C wrapper library for interfacing with non-canonical serial port devices. Supports synchronous and asynchronous communication, as well as automatic hotplug detection and reconnection."
+# --- Default Target ---
+all: $(LIB_A) $(LIB_SO) $(PC_FILE)
 
-# --- Build Rules ---
-single_so:
-	@echo "Creating the libraries for the host platform..."
-	$(MAKE) clean
-	$(MAKE) release TARGET_ARCH_LLC="" TARGET_ARCH_CC="" TYPE=so CF=-fPIC LF="-relocation-model=pic" LDF="" TARGET_INC=""
+# --- Compilation ---
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
+	@echo "  CC      $< [$(TARGET_TRIPLE)]"
+	@$(CC) $(CFLAGS) -c $< -o $@
 
-single_a:
-	@echo "Creating the libraries for the host platform..."
-	$(MAKE) clean
-	$(MAKE) release TARGET_ARCH_LLC="" TARGET_ARCH_CC="" TYPE=a CF=-fPIC LF="-relocation-model=pic" LDF="" TARGET_INC=""
+# --- Static Library ---
+$(LIB_A): $(OBJ)
+	@echo "  AR      $@"
+	@$(AR) rcs $@ $^
 
+# --- Shared Library ---
+$(LIB_SO): $(OBJ)
+	@echo "  LD      $@"
+	@$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+	@ln -sf lib$(NAME).so.$(VERSION) $(BUILD_DIR)/lib$(NAME).so
 
-all: 
-	@echo "Creating the libraries for the following platforms:"
-	@echo "aarch64, x86-64, arm"
-	$(MAKE) clean
-	$(MAKE) release TARGET_ARCH_LLC=arm TARGET_ARCH_CC=arm-linux-gnueabihf TYPE=so CF=-fPIC LF="-relocation-model=pic" LDF="" TARGET_INC="--target="
-	$(MAKE) clean
-	$(MAKE) release TARGET_ARCH_LLC=x86-64 TARGET_ARCH_CC=x86_64-linux-gnu TYPE=so CF=-fPIC LF="-relocation-model=pic" LDF="" TARGET_INC="--target="
-	$(MAKE) clean
-	$(MAKE) release TARGET_ARCH_LLC=aarch64 TARGET_ARCH_CC=aarch64-linux-gnu TYPE=so CF+=-fPIC LF="-relocation-model=pic" LDF="" TARGET_INC="--target="
+# --- Pkg-Config Generation ---
+$(PC_FILE):
+	@echo "  GEN     $@"
+	@echo "prefix=/usr/local" > $@
+	@echo "exec_prefix=\$${prefix}" >> $@
+	@echo "libdir=\$${exec_prefix}/lib" >> $@
+	@echo "includedir=\$${prefix}/include" >> $@
+	@echo "" >> $@
+	@echo "Name: $(NAME)" >> $@
+	@echo "Description: Linux epoll serial port library" >> $@
+	@echo "Version: $(VERSION)" >> $@
+	@echo "Libs: -L\$${libdir} -l$(NAME) $(LIBS)" >> $@
+	@echo "Cflags: -I\$${includedir}" >> $@
 
-# Create build directories
-$(BUILD_DIR) $(LLVM_IR_DIR) $(ASM_DIR):
-	@mkdir -p $@
-	@echo "Created directory $@"
+# --- Release/Cross-Compile Target ---
+# Usage: make release ARCH=arm
+release: clean all
+	@echo "Creating release for $(TARGET_TRIPLE)..."
+	@mkdir -p $(OUT_DIR)
+	@cp $(INC_DIR)/*.h $(OUT_DIR)/
+	@cp $(LIB_A) $(LIB_SO) $(PC_FILE) $(OUT_DIR)/
+	@echo "Release ready in $(OUT_DIR)"
 
-# Compile .c or .cpp to LLVM IR (.ll)
-$(LLVM_IR_DIR)/%.ll: $(SRC_DIR)/%.c | $(LLVM_IR_DIR)
-	@echo "Compiling $< to LLVM IR $@"
-	$(LLVM_CC) -std=gnu99 $(CFLAGS) $(CF) -S -emit-llvm $(TARGET_INC)$(TARGET_ARCH_CC) $< -o $@
-
-# Optimize LLVM IR (optional)
-$(LLVM_IR_DIR)/%.opt.ll: $(LLVM_IR_DIR)/%.ll
-	@echo "Optimizing LLVM IR $< to $@"
-	$(LLVM_OPT) $(OPT_FLAGS) $< -o $@
-
-# Compile LLVM IR (.ll) to Assembly (.s)
-$(ASM_DIR)/%.s: $(LLVM_IR_DIR)/%.opt.ll | $(ASM_DIR)
-	@echo "Compiling LLVM IR $< to Assembly $@"
-	$(LLC) -march=$(TARGET_ARCH_LLC) $(LF) $< -o $@
-
-# Assemble Assembly (.s) to Object (.o)
-$(BUILD_DIR)/%.o: $(ASM_DIR)/%.s | $(BUILD_DIR)
-	@echo "Assembling $< to Object $@"
-	$(LLVM_LD) $(ASM_FLAGS) $(CF) $(TARGET_INC)$(TARGET_ARCH_CC) -c $< -o $@
-
-# Create the static library (.a)
-$(TARGET1_A): $(TARGET1_OBJ)
-	@echo "Creating static library $(TARGET1_NAME)..."
-	$(LLVM_AR) rcs $@ $(TARGET1_OBJ)
-	@echo "Built static library: $@"
-
-# Create the dynamic library (.a)
-$(TARGET1_SO): $(TARGET1_OBJ)
-	@echo "Creating dynamic library $(TARGET1_NAME)..."
-	$(LLVM_CC) -shared $(TARGET_INC)$(TARGET_ARCH_CC) -o $@ $< $(LD_FLAGS) $(LD_LIB) $(LDF)
-	@echo "Built dynamic library: $@"
-
-# Generate the documentation
-documentation:
-	@echo "Generating documentation..."
-	@cp docs/Doxyfile docs/Doxyfile.tmp
-	@sed -i 's|^PROJECT_NAME.*|PROJECT_NAME = $(PROJECT_NAME)|' docs/Doxyfile.tmp
-	@sed -i 's|^PROJECT_NAME_BRIEF.*|PROJECT_NAME_BRIEF = $(PROJECT_NAME_BRIEF)|' docs/Doxyfile.tmp
-	@sed -i 's|^PROJECT_BRIEF.*|PROJECT_BRIEF = $(PROJECT_BRIEF)|' docs/Doxyfile.tmp
-	@sed -i 's|^PROJECT_NUMBER.*|PROJECT_NUMBER = $(MAJOR).$(MINOR).$(RELEASE)|' docs/Doxyfile.tmp
-	@doxygen docs/Doxyfile.tmp
-	@echo "Documentation generated in $(DOC_DIR)"
-
-release: $(BUILD_DIR)/lib$(TARGET1_NAME).$(TYPE)
-	@mkdir -p release/lib$(TARGET1_NAME)-$(TARGET_ARCH_CC)
-	@cp include/$(TARGET1_NAME).h release/lib$(TARGET1_NAME)-$(TARGET_ARCH_CC)/$(TARGET1_NAME).h
-	@cp $(BUILD_DIR)/lib$(TARGET1_NAME).$(TYPE) release/lib$(TARGET1_NAME)-$(TARGET_ARCH_CC)/lib$(TARGET1_NAME).$(TYPE)
-	@echo "Done creating a release for $(TARGET_ARCH_CC)..."
-	@echo "Creating release installation bash..."
-	@echo   "#!/bin/bash" \
-			"\n" \
-			'\nif [ "$$EUID" -ne 0 ]; then' \
-			"\n  echo \"Error: Please run this script with sudo.\"" \
-			"\n  exit 1" \
-			"\nfi" \
-			"\necho \"0: Install\"" \
-			"\necho \"1: Uninstall\"" \
-			"\nread -p \">> \" choice" \
-			'\nif [ "$$choice" -eq 0 ]; then' \
-			"\n  echo \"Installing to /usr/local/...\"" \
-			"\n  cp $(TARGET1_NAME).h /usr/local/include/$(TARGET1_NAME).h" \
-			"\n  cp lib$(TARGET1_NAME).$(TYPE) /usr/lib/$(TARGET_ARCH_CC)/lib$(TARGET1_NAME).$(TYPE)" \
-			"\n  ldconfig" \
-			"\n  echo \"Installation complete.\"" \
-			"\nelse" \
-			"\n  echo \"Uninstalling from /usr/local/...\"" \
-			"\n  rm /usr/lib/$(TARGET_ARCH_CC)/lib$(TARGET1_NAME).$(TYPE)" \
-			"\n  rm /usr/local/include/$(TARGET1_NAME).h" \
-			"\n  ldconfig" \
-			"\n  echo \"Uninstallation complete.\"" \
-			"\nfi" \
-			"\n" > ./release/lib$(TARGET1_NAME)-$(TARGET_ARCH_CC)/install.sh
-	@chmod u+x ./release/lib$(TARGET1_NAME)-$(TARGET_ARCH_CC)/install.sh
-	@echo "Zipping the release lib$(TARGET1_NAME)-$(TARGET_ARCH_CC).zip..."
-	@cd release && zip -r lib$(TARGET1_NAME)-$(TARGET_ARCH_CC).zip lib$(TARGET1_NAME)-$(TARGET_ARCH_CC) 
-
+# --- Cleanup ---
 clean:
-	@echo "Cleaning build and documentation directories..."
-	@rm -rf $(DOCS_DIR)/html
-	@rm -rf $(DOCS_DIR)/man
-	@rm -rf $(DOCS_DIR)/Doxyfile.tmp
-	@rm -rf $(BUILD_DIR)
-	@echo "Clean complete."
+	rm -rf build/$(TARGET_TRIPLE) release/$(TARGET_TRIPLE)
 
-cleanrelease:
-	@echo "Cleaning the release directory..."
-	@rm -rf release
-	
-tests: single_a
-	$(MAKE) $(TESTS)
+cleanall:
+	rm -rf build/ release/
 
-$(TESTS): %: single_a $(BUILD_DIR)/%
+$(BUILD_DIR):
+	mkdir -p $@
 
-$(BUILD_DIR)/%: $(TEST_DIR)/%.c | $(BUILD_DIR)
-	@echo "Compiling $< to test binary $@..."
-	$(LLVM_CC) -std=gnu99 $(CFLAGS) $< -o $@ -L$(BUILD_DIR) -l$(TARGET1_NAME) $(LD_LIB)
-
-# 
-.PHONY: clean
+.PHONY: all clean release
