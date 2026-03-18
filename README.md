@@ -279,7 +279,15 @@ int main(void) {
 
 ## Documentation
 
-API documentation generation (from xcserial directory) via ([Doxygen](https://www.doxygen.nl/))
+API documentation generation (from xcserial directory) via ([Doxygen](https://www.doxygen.nl/)), 
+and man page generation based on [doxy2man](https://github.com/gsauthof/doxy2man) project.
+
+Requirements, on Debian-based systems:
+```bash
+sudo apt install doxygen
+```
+
+For the doxy2man project follow the guidelines in [doxy2man](https://github.com/gsauthof/doxy2man).
 
 Generation:
 ```bash
