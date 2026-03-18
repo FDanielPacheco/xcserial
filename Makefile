@@ -33,6 +33,7 @@ SRC_DIR   = src
 INC_DIR   = include
 BUILD_DIR = build/$(TARGET_TRIPLE)
 OUT_DIR   = release/$(TARGET_TRIPLE)
+DOC_DIR   = docs
 
 # --- Compiler Flags (GDB Friendly) ---
 # -Og: Optimize for debugging experience
@@ -52,7 +53,7 @@ LIB_SO    = $(BUILD_DIR)/lib$(NAME).so.$(VERSION)
 PC_FILE   = $(BUILD_DIR)/$(NAME).pc
 
 # --- Default Target ---
-all: $(LIB_A) $(LIB_SO) $(PC_FILE)
+all: $(LIB_A) $(LIB_SO) $(PC_FILE) docs
 
 # --- Compilation ---
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
@@ -87,26 +88,29 @@ $(PC_FILE):
 
 # --- Release/Cross-Compile Target ---
 # Usage: make release ARCH=arm
-release: clean all
-	@echo "Creating release for $(TARGET_TRIPLE)..."
+release: cleanall all
 	@mkdir -p $(OUT_DIR)
 	@cp $(INC_DIR)/*.h $(OUT_DIR)/
 	@cp $(LIB_A) $(LIB_SO) $(PC_FILE) $(OUT_DIR)/
-	@echo "Release ready in $(OUT_DIR)"
+	@cp -r $(DOC_DIR)/html $(OUT_DIR)/
+	@cp -r $(DOC_DIR)/man $(OUT_DIR)/
+	@zip -r $(OUT_DIR).zip $(OUT_DIR) >> /dev/null
+	@echo "  GEN     $(OUT_DIR).zip"
 
 # --- Documentation with doxygen ---
 docs:
-	@echo "Generating documentation..."
-	@cp docs/Doxyfile docs/Doxyfile.tmp
+	@cp $(DOC_DIR)/Doxyfile $(DOC_DIR)/Doxyfile.tmp
 	@sed -i 's|^PROJECT_NAME.*|PROJECT_NAME = $(NAME)|' docs/Doxyfile.tmp
 	@sed -i 's|^PROJECT_NAME_BRIEF.*|PROJECT_NAME_BRIEF = $(BRIEF)|' docs/Doxyfile.tmp
 	@sed -i 's|^PROJECT_BRIEF.*|PROJECT_BRIEF = $(BRIEF)|' docs/Doxyfile.tmp
 	@sed -i 's|^PROJECT_NUMBER.*|PROJECT_NUMBER = $(VERSION)|' docs/Doxyfile.tmp
-	@doxygen docs/Doxyfile.tmp
-	@rm docs/Doxyfile.tmp
-	@mkdir -p docs/man
-	@doxy2man --novalidate docs/xml/xcserial_8h.xml -o docs/man
-	@echo "Documentation generated in $(DOC_DIR)"
+	@echo "  GEN     $(DOC_DIR)/html"
+	@echo "  GEN     $(DOC_DIR)/xml"
+	@doxygen $(DOC_DIR)/Doxyfile.tmp >> /dev/null
+	@rm $(DOC_DIR)/Doxyfile.tmp
+	@mkdir -p $(DOC_DIR)/man
+	@echo "  GEN     $(DOC_DIR)/man"
+	@doxy2man --novalidate --nowarn --nosummary --pkg "$(NAME) man page" $(DOC_DIR)/xml/xcserial_8h.xml -o $(DOC_DIR)/man
 
 # --- Dynamic Test Suite ---
 .PRECIOUS: $(BUILD_DIR)/test/%
@@ -122,7 +126,7 @@ test-%: $(BUILD_DIR)/test/%
 clean:
 	rm -rf build/$(TARGET_TRIPLE) release/$(TARGET_TRIPLE) 
 cleanall:
-	rm -rf build/ release/ docs/html docs/man docs/xml
+	rm -rf build/ release/ $(DOC_DIR)/html $(DOC_DIR)/man $(DOC_DIR)/xml
 
 $(BUILD_DIR):
 	mkdir -p $@

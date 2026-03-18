@@ -200,8 +200,8 @@ struct serial_epoll {
 };
 
 /**
- * @struct serial_epoll
- * @brief Epoll file descriptors.
+ * @struct serial_resv
+ * @brief Reserved memory space for formated strings.
  */
 struct serial_resv {
         char label[128]; 
