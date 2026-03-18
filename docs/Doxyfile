@@ -908,7 +908,7 @@ WARN_LOGFILE           =
 # spaces. See also FILE_PATTERNS and EXTENSION_MAPPING
 # Note: If this tag is empty the current directory is searched.
 
-INPUT                  = src include .
+INPUT                  = include/xcserial.h README.md
  
 # This tag can be used to specify the character encoding of the source files
 # that doxygen parses. Internally doxygen uses the UTF-8 encoding. Doxygen uses
@@ -940,8 +940,6 @@ INPUT_ENCODING         = UTF-8
 FILE_PATTERNS          = *.c \
                          *.h \
                          *.md \
-#                         *.cpp \
-#                         *.hpp
                          
 # The RECURSIVE tag can be used to specify whether or not subdirectories should
 # be searched for input files as well.
@@ -1850,7 +1848,7 @@ EXTRA_SEARCH_MAPPINGS  =
 # If the GENERATE_LATEX tag is set to YES, doxygen will generate LaTeX output.
 # The default value is: YES.
 
-GENERATE_LATEX         = YES
+GENERATE_LATEX         = NO
 
 # The LATEX_OUTPUT tag is used to specify where the LaTeX docs will be put. If a
 # relative path is entered the value of OUTPUT_DIRECTORY will be put in front of
@@ -2091,7 +2089,7 @@ RTF_EXTENSIONS_FILE    =
 # classes and files.
 # The default value is: NO.
 
-GENERATE_MAN           = YES
+GENERATE_MAN           = NO
 
 # The MAN_OUTPUT tag is used to specify where the man pages will be put. If a
 # relative path is entered the value of OUTPUT_DIRECTORY will be put in front of
@@ -2101,6 +2099,7 @@ GENERATE_MAN           = YES
 # This tag requires that the tag GENERATE_MAN is set to YES.
 
 MAN_OUTPUT             = man
+MAN_SECTION            = 3
 
 # The MAN_EXTENSION tag determines the extension that is added to the generated
 # man pages. In case the manual section does not start with a number, the number
@@ -2135,7 +2134,7 @@ MAN_LINKS              = NO
 # captures the structure of the code including all documentation.
 # The default value is: NO.
 
-GENERATE_XML           = NO
+GENERATE_XML           = YES
 
 # The XML_OUTPUT tag is used to specify where the XML pages will be put. If a
 # relative path is entered the value of OUTPUT_DIRECTORY will be put in front of
@@ -2152,7 +2151,7 @@ XML_OUTPUT             = xml
 # The default value is: YES.
 # This tag requires that the tag GENERATE_XML is set to YES.
 
-XML_PROGRAMLISTING     = YES
+XML_PROGRAMLISTING     = NO
 
 # If the XML_NS_MEMB_FILE_SCOPE tag is set to YES, doxygen will include
 # namespace members in file scope as well, matching the HTML output.

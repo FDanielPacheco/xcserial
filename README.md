@@ -1,218 +1,314 @@
-# xcserial: Linux-based C serial port library.
+# xcserial: High-Performance Linux Serial Port Library
 
-`xcserial` xcserial is a lightweight, user-space C library that abstracts low-level serial port I/O control on Linux. It offers comprehensive configuration of baud rate, parity, flow control, and millisecond-level timeouts. The architecture supports two distinct operating modes:
+`xcserial` is a lightweight, user-space C library designed for non-canonical serial port 
+communication on Linux. It abstracts low-level `termios` and `ioctl` operations, providing
+a robust interface for high-frequency data exchange and hardware-level device management. 
 
-- Synchronous: Utilizes the epoll system call for efficient, resource-sparing blocking I/O with precise response latency.
-- Asynchronous: Implements a multithreaded, callback-driven mechanism ideal for event-based applications.
-  
-A core capability is device resilience, enabling automatic port reopening by matching specified udevadm device fields upon physical disconnection.
-The library's stability and performance have been validated through its continuous deployment over one year within two scientific prototypes for autonomous underwater and mobile robotics.
+The library utilizes the Linux `epoll` subsystem to achieve efficient I/O multiplexing, 
+ensuring minimal CPU utilization during blocking operations. A primary feature is its 
+device resilience, which utilizes `udev` metadata to enable automatic port restoration 
+following physical disconnection or hotplug events.
+
+The architecture has been validated through extensive deployment in scientific robotics 
+prototypes, specifically for autonomous underwater and mobile platforms.
 
 ---
 
 ## Installation
 
-### Library Requirements
+### System Requirements
 
-- C Standard Library (lc)
-- POSIX Threads Library (lpthread)
-- libudev (ludev)
+The library depends on the following system components:
+- Standard C Library (ISO C99/C11/C23)
+- libudev (Hardware abstraction layer)
 
-In Debian-based Linux:
+On Debian-based systems:
 ```bash
-sudo apt install build-essential libudev-dev
+sudo apt install build-essential libudev-dev clang llvm
 ```
 
-### Prebuilt binaries
+### Build from Source
 
-Available platforms:
-- `x86_64-linux-gnu` (Intel/AMD)
-- `arm-linux-gnueabihf` (e.g. Raspberry Pi 32-bit CPU)
-- `aarch64-linux-gnu` (e.g. Raspberry Pi 64-bit CPU)
+The build system utilizes a Clang/LLVM toolchain for optimized machine code generation and cross-compilation support ([clang](https://clang.llvm.org/)).
 
-```bash
-# Download and extract pre-compiled library
-wget https://github.com/FDanielPacheco/xcserial/releases/download/alpha/libxcserial-<platform>.zip
-unzip libxcserial-<platform>.zip
-
-# Install using the provided script
-chmod u+x install.sh
-./install.sh 
-```
-
-### Build from source
-
-Build Requirements:
-- clang: Compiler frontend and Linker
-- opt: Optimizer
-- llc: Compiler backend
-- llvm-ar: Build static library 
-
-```bash
-sudo apt install llvm clang
-```
-
-Clone the repository:
-```bash
-git clone https://github.com/FDanielPacheco/xcserial.git
-cd xcserial
-```
-
-Build the dynamic library for the host platform:
+1. Compilation for Host Architecture:
 ```bash
 make
 ```
 
-Build the dynamic library for all platforms listed above:
+2. Cross-Compilation: 
+Target specific architectures using the `ARCH` variable to invoke the corresponding LLVM triple.
 ```bash
-make all
+make ARCH=arm      # ARM-hf  (e.g., Raspberry Pi 32-bit)
+make ARCH=aarch64  # AArch64 (e.g., Raspberry Pi 5, Jetson)
 ```
 
-Build for a specific target and type independent on the host platform (require the dynamic/static libraries for that platform):
+3. Release Generation:
+To generate a distribution package including headers, libraries, a `pkg-config` file, and an installation script:
 ```bash
-make release TARGET_ARCH_LLC=<arch> TARGET_ARCH_CC=<triplet> TYPE=<so|a> CF=-fPIC LF="-relocation-model=pic"
+make release ARCH=<target_arch>
 ```
-
-`<arch,triplet>` examples:
-- `arm`, `arm-linux-gnueabihf`
-- `x86-64`, `x86_64-linux-gnu`
-- `aarch64`, `aarch64-linux-gnu`
- 
-`<TYPE>`: Dynamic: so | Static: a
 
 ---
-## Usage Example 
 
-### Synchronous (Blocking) Mode
+## Usage Examples
+
+The following examples progressively demonstrate the library's capabilities, 
+from basic string I/O to advanced hardware tracking. In all examples, a timeout 
+value of `0` directs the API to use the default internal timeout defined during configuration.
+
+### 1. Simple String I/O
+The most common use case: writing a formatted text command and reading a newline-terminated response.
+
 ```c
 #include <xcserial.h>
-#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-int main( void ) {
-  const char port[] = "/dev/ttyUSB0";
-  serial_t serial;
+int main(void) {
+        serial_t serial;
+        int err = 0;
 
-  // Open port. Last three NULLs are for port configurations, udev params and async callbacks.
-  if( -1 == serial_open( &serial, port, NULL ) )
-    return EXIT_FAILURE;
+        err = serial_open(&serial, "/dev/ttyUSB0");
+        if (0 > ) {
+                strerror(-err);
+                return EXIT_FAILURE;
+        }
 
-  // Set configuration
-  serial_set_baudrate( B115200, &serial );
-  serial_set_timeout( 10, &serial ); // 10ms read timeout
+        // Configure the serial port with 115200 bps and 100 ms timeout for IO
+        serial_set_baudrate(SERIAL_B115200, &serial);
+        serial_set_timeout(100, &serial);
 
-  // Print configuration to stdout
-  char text[32]; 
-  snprintf( text, sizeof(text), "[PID:%d]", getpid() );
-  serial_print_config( 1, text, &serial );
+        // Write a formatted string
+        serial_writef(&serial, 0, &err, "REQ_TEMP_ID:%d\n", 1);
 
-  // Write formatted string
-  int var1 = 123;
-  float var2 = 45.67f;
-  serial_writef( &serial, "Message:%d,%.2f\n", var1, var2 );
+        // Read until newline character
+        char rx_buf[128];
+        ssize_t bytes_read = serial_readl(rx_buf, sizeof(rx_buf), 0, &serial, &err);
 
-  // Read a chunk of bytes
-  uint8_t buf[ BUFSIZ ];
-  size_t len = serial_read( buf, sizeof(buf), 0, &serial ); 
-  
-  // Close the serial port
-  serial_close( &serial );
-  return 0;  
+        serial_close(&serial);
+        return 0;
 }
 ```
 
-### Asynchronous (Callback) Mode
-This mode runs the I/O loop in the background, executing callbacks when data is received or the device is disconnected.
+### 2. Raw Binary I/O
+For fixed-size packets or device control protocols, standard read/write can be used.
+
 ```c
-#include <xcserial.h>
-#include <stdio.h>
+        // ... Initialization ...
 
-uint8_t receive_buffer[ BUFSIZ ];
-size_t buffer_length = 0; 
+        // Sending a 3-byte binary command
+        uint8_t tx_buf[] = { 0x01, 0xFF, 0x0A };
+        serial_write(tx_buf, sizeof(uint8_t), 3, &serial, 0, &err);
 
-// 1. Data Reception Callback
-void read_callback( const uint8_t * data, const size_t len ) {
-  // Check available space and copy data
-  if( BUFSIZ > buffer_length + len ){
-    memcpy( &receive_buffer[buffer_length], data, len );
-    buffer_length += len;
-  } 
-}
-
-// 2. Disconnection Callback
-int8_t disconnect_callback( void ) {
-  // Logic to run when the device is physically disconnected
-  printf("Device disconnected! Waiting for hotplug...\n");
-  // ...
-}
-
-int main( void ) {
-  // ... serial_open( ... )
-  serial_t serial;
-  // ... open and set params ...
-
-  // Set the callback functions
-  serial_async_set_callback( read_callback, disconnect_callback, &serial );
-
-  // Infinite loop in the main thread (I/O runs in a separate thread)
-  for( ; ; ){
-    // Main thread is free to do CPU-intensive work or check flags
-    if( buffer_length > 0 && !strcmp( (char*)receive_buffer, "PATTERN" ) ){
-        // Process received data
-    }
-
-    // Polling system
-    serial_poll( &serial );
-  }
-}
+        // Reading a known 16-byte fixed payload
+        uint8_t rx_buf[16];
+        ssize_t bytes_read = serial_read(rx_buf, sizeof(uint8_t), 16, 0, &serial, &err);
 ```
 
-### Hotplug Reopen Feature
-Specify a list of udevadm fields to uniquely identify the device. If the port is lost, serial_reopen will monitor for a device matching those fields.
+### 3. Complex Delimiter Parsing
+Some industrial protocols do not rely on a single newline, but rather a sequence of 
+bytes to denote the end of a frame (EOF). `serial_read_delim()` handles multi-byte 
+termination sequences. Additionally, instead of using the internal timeout defined with
+`serial_set_timeout()` a custom timeout with 1 s is used.
+
 ```c
-int main( void ){
-  serial_t serial;
-  // ... open and set params ...
+        // ... Initialization ...
 
-  // 1. Define the udevadm fields for tracking
-  const char params[][NAME_MAX] = {
-    "ID_MODEL",
-    "ID_USB_VENDOR",
-    "ID_SERIAL_SHORT"
-  };
-  serial_set_udev_param_list( params, 3, NAME_MAX, &serial );
+        uint8_t rx_buf[1024];
+        // Protocol frame ends with the specific sequence: 0xA1, 0xA2, 0xA3
+        uint8_t delimiter[] = { 0xA1, 0xA2, 0xA3 };
 
-  // ... main application logic ...
+        // Read data continuously until the 3-byte delimiter is matched, 
+        // the buffer fills, or the timeout occurs.
+        int timeout = 1000;
+        ssize_t frame_len = serial_read_delim(
+                rx_buf, sizeof(uint8_t), sizeof(rx_buf), 
+                delimiter, 3, 
+                timeout, 
+                &serial, &err
+        );
+```
 
-  // 2. Call this after a device loss is detected or in the disc_ck( ) callback
-  uint16_t retry_attempts = 100; 
-  if( -1 == serial_reopen( &serial, retry_attempts ) ){
-    serial_close( &serial );
-    return EXIT_FAILURE;
-  }
-  // ... continue program execution ...
+### 4. Hardware Resilience and Hotplugging
+To ensure connectivity across device re-enumeration (e.g., if a USB cable is bumped 
+and the node changes from `/dev/ttyUSB0` to `/dev/ttyUSB1`), `xcserial` can track 
+devices via hardware-specific `udev` attributes.
+
+```c
+        // ... Initialization ...
+
+        // Define hardware-specific fields to uniquely identify the device
+        struct serial_udev_field fields[] = {
+                {.label = "ID_VENDOR_ID"},
+                {.label = "ID_MODEL_ID"},
+                {.label = "ID_SERIAL_SHORT"}
+        };
+        struct serial_udev u_cfg = {
+                .fields = fields,
+                .size = 3
+        };
+
+        // Attach udev parameters to the serial handle
+        serial_set_udev(&u_cfg, &serial);
+
+        // Main application loop
+        for ( ; ; ) {
+                // Attempt a read operation...
+                if (serial_read( ..., &err) < 0) {
+                    // If the physical device is lost or disconnected:
+                    if ( !serial_reopen(&serial) ) {
+                        // The library successfully matched the udev parameters, 
+                        // found the new sysfs path, and restored communication.
+                        continue; 
+                    }
+                }
+        }
+```
+
+### 5. Modem Line Control
+The library provides direct low-level access to the physical modem control lines 
+for hardware handshaking or custom signaling (e.g., RS-485 transceiver direction
+control or forcing a hardware reset).
+
+```c
+        // ... Initialization ...
+
+        // Set Data Terminal Ready (DTR) HIGH and Request To Send (RTS) LOW
+        struct serial_line_state states[] = {
+                {SERIAL_DTR, 1},
+                {SERIAL_RTS, 0}
+        };
+        struct serial_lines table = { 
+                .lines = states, 
+                .size = 2 
+        };
+
+        // Apply states to the hardware pins
+        serial_set_lines(&table, &serial);
+
+        // Retrieve and log current line states
+        const char *line_status = serial_get_lines(&serial);
+```
+
+### 6. External Integration
+The library supports external integration of the serial object with an external 
+`epoll` or any file descriptor dependent library, as demonstrated by the example below,
+since the `serial_t` object has a file descriptor at `serial->fd`.
+
+```c
+int main(void) {
+        serial_t ser;
+        int epoll_fd, t_fd, sig_fd;
+        struct epoll_event ev, events[MAX_EVENTS];
+        sigset_t mask;
+
+        // Initialize xcserial
+        if (serial_open(&ser, "/dev/ttyACM0") < 0) 
+                return EXIT_FAILURE;
+        serial_set_baudrate(SERIAL_B115200, &ser);
+
+        // Setup Signal Handling (SIGINT)
+        sigemptyset(&mask);
+        sigaddset(&mask, SIGINT);
+        sigprocmask(SIG_BLOCK, &mask, NULL);
+        sig_fd = signalfd(-1, &mask, 0);
+
+        // Setup a Periodic Timer (1 second)
+        t_fd = timerfd_create(CLOCK_MONOTONIC, 0);
+        struct itimerspec period = { {1, 0}, {1, 0} };
+        timerfd_settime(t_fd, 0, &period, NULL);
+
+        // Create Global Epoll Instance
+        epoll_fd = epoll_create1(0);
+
+        // Register Serial RX
+        ev.events = EPOLLIN; ev.data.fd = ser.fd;
+        epoll_ctl(epoll_fd, EPOLL_CTL_ADD, ser.fd, &ev);
+
+        // Register Timer
+        ev.events = EPOLLIN; ev.data.fd = t_fd;
+        epoll_ctl(epoll_fd, EPOLL_CTL_ADD, t_fd, &ev);
+
+        // Register Signal
+        ev.events = EPOLLIN; ev.data.fd = sig_fd;
+        epoll_ctl(epoll_fd, EPOLL_CTL_ADD, sig_fd, &ev);
+
+        printf("Event loop started. Press Ctrl+C to exit.\n");
+
+        int run = 1;
+        while (run) {
+                int nfds = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
+
+                for (int i = 0; i < nfds; i++) {
+                    // HANDLE SERIAL DATA
+                    if (events[i].data.fd == ser.fd) {
+                        char buf[256];
+                        int err = 0;
+                        // Passing -1 ensures direct read() access without internal epoll blocking
+                        ssize_t n = serial_read(buf, 1, sizeof(buf) - 1, -1, &ser, &err);
+                        if (n > 0) {
+                            buf[n] = '\0';
+                            printf("[SERIAL] Received: %s", buf);
+                        }
+                    }
+                    // HANDLE TIMER
+                    else if (events[i].data.fd == t_fd) {
+                        uint64_t miss;
+                        read(t_fd, &miss, sizeof(miss));
+                        printf("[TIMER] 1s Heartbeat - Sending Telemetry...\n");
+                        serial_writef(&ser, -1, NULL, "HB_STAT:OK\n");
+                    }
+                    // HANDLE SIGNAL
+                    else if (events[i].data.fd == sig_fd) {
+                        printf("\n[SIGNAL] SIGINT received. Shutting down.\n");
+                        run = 0;
+                    }
+                }
+        }
+
+        close(sig_fd);
+        close(t_fd);
+        close(epoll_fd);
+        serial_close(&ser);
+        return 0;
 }
 ```
+
+---
 
 ## Documentation
 
-API documentation generation (from xcserial directory):
-```bash
-make documentation
-```
-Manual pages: `man docs/man/man3/xcserial.c.3` or `man docs/man/man3/xcserial.h.3` \
-HTML docs: `firefox docs/html/index.html`
+API documentation generation (from xcserial directory) via ([Doxygen](https://www.doxygen.nl/))
 
-Additional:
-- [POSIX Serial Programming Guide](https://people.na.infn.it/~garufi/didattica/CorsoAcq/SerialProgrammingInPosixOSs.pdf)
-- [ERRNO Table](https://man7.org/linux/man-pages/man3/errno.3.html)
-- [Serial Lines Table](https://man7.org/linux/man-pages/man2/TIOCMSET.2const.html)
+Generation:
+```bash
+make docs
+```
+
+Accessing MAN Pages:
+```bash
+man ./docs/man/man3/xcserial.h.3
+```
+Accessing Doxygen HTML interface:
+```bash
+<html-viewer> ./docs/html/index.html
+```
+
+Technical References:
+- [Linux TIOCM Control Consts](https://man7.org/linux/man-pages/man2/TIOCMSET.2const.html)
+- [POSIX Serial Programming](https://people.na.infn.it/~garufi/didattica/CorsoAcq/SerialProgrammingInPosixOSs.pdf)
+- [Linux udev Documentation](https://www.kernel.org/pub/linux/utils/kernel/hotplug/udev/udev.html)
+- [Linux epoll Documentation](https://www.man7.org/linux/man-pages/man7/epoll.7.html)
+- [Linux errno Table](https://man7.org/linux/man-pages/man3/errno.3.html)
 
 ---
+
 ## Author
 
-Fábio D. Pacheco \
-Email: fabio.d.pacheco@inesctec.pt
+Fábio D. Pacheco
+(pacheco.castro.fabio@gmail.com)
 
 ## License
 
-[LGPL-2.1 license](https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html) 
+`xcserial` is released under the [GNU Lesser General Public License v2.1](https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html).

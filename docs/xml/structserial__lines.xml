@@ -1,0 +1,80 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.4" xml:lang="en-US">
+  <compounddef id="structserial__lines" kind="struct" language="C++" prot="public">
+    <compoundname>serial_lines</compoundname>
+    <includes local="no">xcserial.h</includes>
+      <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="structserial__lines_1a55c5d729c410efd9002717b631a9e28a" prot="public" static="no" mutable="no">
+        <type>struct <ref refid="structserial__line__state" kindref="compound">serial_line_state</ref> *</type>
+        <definition>struct serial_line_state* serial_lines::lines</definition>
+        <argsstring></argsstring>
+        <name>lines</name>
+        <qualifiedname>serial_lines::lines</qualifiedname>
+        <briefdescription>
+<para>Pointer to array of states. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="include/xcserial.h" line="156" column="32" bodyfile="include/xcserial.h" bodystart="156" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structserial__lines_1ae4529bf250d3e0d6f85bc19c071ee823" prot="public" static="no" mutable="no">
+        <type>size_t</type>
+        <definition>size_t serial_lines::size</definition>
+        <argsstring></argsstring>
+        <name>size</name>
+        <qualifiedname>serial_lines::size</qualifiedname>
+        <briefdescription>
+<para>Number of lines in the array. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="include/xcserial.h" line="157" column="35" bodyfile="include/xcserial.h" bodystart="157" bodyend="-1"/>
+      </memberdef>
+      </sectiondef>
+    <briefdescription>
+<para>Array wrapper for batch modem line operations. </para>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <collaborationgraph>
+      <node id="3">
+        <label>enum serial_line</label>
+      </node>
+      <node id="2">
+        <label>serial_line_state</label>
+        <link refid="structserial__line__state"/>
+        <childnode refid="3" relation="usage">
+          <edgelabel>+offs</edgelabel>
+        </childnode>
+        <childnode refid="4" relation="usage">
+          <edgelabel>+state</edgelabel>
+        </childnode>
+      </node>
+      <node id="1">
+        <label>serial_lines</label>
+        <link refid="structserial__lines"/>
+        <childnode refid="2" relation="usage">
+          <edgelabel>+lines</edgelabel>
+        </childnode>
+        <childnode refid="5" relation="usage">
+          <edgelabel>+size</edgelabel>
+        </childnode>
+      </node>
+      <node id="5">
+        <label>size_t</label>
+      </node>
+      <node id="4">
+        <label>uint8_t</label>
+      </node>
+    </collaborationgraph>
+    <location file="include/xcserial.h" line="155" column="1" bodyfile="include/xcserial.h" bodystart="155" bodyend="158"/>
+    <listofallmembers>
+      <member refid="structserial__lines_1a55c5d729c410efd9002717b631a9e28a" prot="public" virt="non-virtual"><scope>serial_lines</scope><name>lines</name></member>
+      <member refid="structserial__lines_1ae4529bf250d3e0d6f85bc19c071ee823" prot="public" virt="non-virtual"><scope>serial_lines</scope><name>size</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

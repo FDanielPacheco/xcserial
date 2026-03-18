@@ -1,0 +1,155 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.4" xml:lang="en-US">
+  <compounddef id="structserial__config" kind="struct" language="C++" prot="public">
+    <compoundname>serial_config</compoundname>
+    <includes local="no">xcserial.h</includes>
+      <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="structserial__config_1ac0d486e3eb3a36ae0d224a083f275f19" prot="public" static="no" mutable="no">
+        <type>enum <ref refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2" kindref="member">serial_baudrate</ref></type>
+        <definition>enum serial_baudrate serial_config::baudrate</definition>
+        <argsstring></argsstring>
+        <name>baudrate</name>
+        <qualifiedname>serial_config::baudrate</qualifiedname>
+        <briefdescription>
+<para>Communication speed. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="include/xcserial.h" line="185" column="29" bodyfile="include/xcserial.h" bodystart="185" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structserial__config_1af9be008783a33da697de91381f6ee246" prot="public" static="no" mutable="no">
+        <type>enum <ref refid="xcserial_8h_1af6e29976d192452d020e694d773bee23" kindref="member">serial_flowcontrol</ref></type>
+        <definition>enum serial_flowcontrol serial_config::flowcontrol</definition>
+        <argsstring></argsstring>
+        <name>flowcontrol</name>
+        <qualifiedname>serial_config::flowcontrol</qualifiedname>
+        <briefdescription>
+<para>Flow control mode. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="include/xcserial.h" line="186" column="32" bodyfile="include/xcserial.h" bodystart="186" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structserial__config_1a2985ce4a85f3d6a17fb11af07fa2a7c2" prot="public" static="no" mutable="no">
+        <type>enum <ref refid="xcserial_8h_1a2e0f91ff642506f81cf80f874bd66beb" kindref="member">serial_parity</ref></type>
+        <definition>enum serial_parity serial_config::parity</definition>
+        <argsstring></argsstring>
+        <name>parity</name>
+        <qualifiedname>serial_config::parity</qualifiedname>
+        <briefdescription>
+<para>Parity check mode. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="include/xcserial.h" line="187" column="27" bodyfile="include/xcserial.h" bodystart="187" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structserial__config_1adcb351a5803e7b75b5b2b2d0f21e4cb8" prot="public" static="no" mutable="no">
+        <type>enum <ref refid="xcserial_8h_1acd1b54b03cc6529cba303035e44e2644" kindref="member">serial_databits</ref></type>
+        <definition>enum serial_databits serial_config::databits</definition>
+        <argsstring></argsstring>
+        <name>databits</name>
+        <qualifiedname>serial_config::databits</qualifiedname>
+        <briefdescription>
+<para>Bits per frame. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="include/xcserial.h" line="188" column="29" bodyfile="include/xcserial.h" bodystart="188" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structserial__config_1a64cbb461dac9268de36750ddb50a099f" prot="public" static="no" mutable="no">
+        <type>enum <ref refid="xcserial_8h_1a8d6db945930ac92b575bb87a82dc90bf" kindref="member">serial_stopbits</ref></type>
+        <definition>enum serial_stopbits serial_config::stopbits</definition>
+        <argsstring></argsstring>
+        <name>stopbits</name>
+        <qualifiedname>serial_config::stopbits</qualifiedname>
+        <briefdescription>
+<para>Stop bits. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="include/xcserial.h" line="189" column="29" bodyfile="include/xcserial.h" bodystart="189" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structserial__config_1a4ba70a481bc0928755df9b2950d126fb" prot="public" static="no" mutable="no">
+        <type>int</type>
+        <definition>int serial_config::timeout_ms</definition>
+        <argsstring></argsstring>
+        <name>timeout_ms</name>
+        <qualifiedname>serial_config::timeout_ms</qualifiedname>
+        <briefdescription>
+<para>Default read/write timeout. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="include/xcserial.h" line="190" column="34" bodyfile="include/xcserial.h" bodystart="190" bodyend="-1"/>
+      </memberdef>
+      </sectiondef>
+    <briefdescription>
+<para>Full communication parameters for a serial port. </para>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <collaborationgraph>
+      <node id="2">
+        <label>enum serial_baudrate</label>
+      </node>
+      <node id="5">
+        <label>enum serial_databits</label>
+      </node>
+      <node id="3">
+        <label>enum serial_flowcontrol</label>
+      </node>
+      <node id="4">
+        <label>enum serial_parity</label>
+      </node>
+      <node id="6">
+        <label>enum serial_stopbits</label>
+      </node>
+      <node id="7">
+        <label>int</label>
+      </node>
+      <node id="1">
+        <label>serial_config</label>
+        <link refid="structserial__config"/>
+        <childnode refid="2" relation="usage">
+          <edgelabel>+baudrate</edgelabel>
+        </childnode>
+        <childnode refid="3" relation="usage">
+          <edgelabel>+flowcontrol</edgelabel>
+        </childnode>
+        <childnode refid="4" relation="usage">
+          <edgelabel>+parity</edgelabel>
+        </childnode>
+        <childnode refid="5" relation="usage">
+          <edgelabel>+databits</edgelabel>
+        </childnode>
+        <childnode refid="6" relation="usage">
+          <edgelabel>+stopbits</edgelabel>
+        </childnode>
+        <childnode refid="7" relation="usage">
+          <edgelabel>+timeout_ms</edgelabel>
+        </childnode>
+      </node>
+    </collaborationgraph>
+    <location file="include/xcserial.h" line="184" column="1" bodyfile="include/xcserial.h" bodystart="184" bodyend="191"/>
+    <listofallmembers>
+      <member refid="structserial__config_1ac0d486e3eb3a36ae0d224a083f275f19" prot="public" virt="non-virtual"><scope>serial_config</scope><name>baudrate</name></member>
+      <member refid="structserial__config_1adcb351a5803e7b75b5b2b2d0f21e4cb8" prot="public" virt="non-virtual"><scope>serial_config</scope><name>databits</name></member>
+      <member refid="structserial__config_1af9be008783a33da697de91381f6ee246" prot="public" virt="non-virtual"><scope>serial_config</scope><name>flowcontrol</name></member>
+      <member refid="structserial__config_1a2985ce4a85f3d6a17fb11af07fa2a7c2" prot="public" virt="non-virtual"><scope>serial_config</scope><name>parity</name></member>
+      <member refid="structserial__config_1a64cbb461dac9268de36750ddb50a099f" prot="public" virt="non-virtual"><scope>serial_config</scope><name>stopbits</name></member>
+      <member refid="structserial__config_1a4ba70a481bc0928755df9b2950d126fb" prot="public" virt="non-virtual"><scope>serial_config</scope><name>timeout_ms</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

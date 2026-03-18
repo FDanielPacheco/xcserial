@@ -1,5 +1,5 @@
 /**
- * @file      log.h
+ * @file      stblog.h
  * 
  * @version   0.1.0
  *
@@ -9,7 +9,7 @@
  * @email     fabio.d.pacheco@inesctec.pt or pacheco.castro.fabio@gmail.com
  *
  *  @note
- *  log - simple logging system 
+ *  stblog - simple logging system 
  *  Copyright (C) 2026 Fábio D. Pacheco 
  *
  *  This library is free software; you can redistribute it and/or
@@ -29,14 +29,14 @@
  * 
  */
 
-#ifndef LOG_H
-#define LOG_H
+#ifndef STBLOG_H
+#define STBLOG_H
 
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
 
-enum log_level {
+enum stblog_level {
         LOG_DEBUG = 0,
         LOG_INFO,
         LOG_WARN,
@@ -44,37 +44,37 @@ enum log_level {
         LOG_FATAL
 };
 
-struct log_report {
-        const char     *label;     
-        const char     *filename;
-        int             line;
-        int             err_code;
-        enum log_level  prio;    
+struct stblog_report {
+        const char        *label;     
+        const char        *filename;
+        int                line;
+        int                err_code;
+        enum stblog_level  prio;    
 };
 
-struct log_logger {
-        void (*handler)(struct log_report, const char *);
+struct stblog_logger {
+        void (*handler)(struct stblog_report, const char *);
         int enable;
 };
 
 static inline void
-log_default(
-        struct log_report  report,
-        const char        *msg
+stblog_default(
+        struct stblog_report  report,
+        const char           *msg
 );
 
 static inline void 
-log_emit(
-        struct log_logger *lg,
-        struct log_report  report,
-        const char        *fmt,
+stblog_emit(
+        struct stblog_logger *lg,
+        struct stblog_report  report,
+        const char           *fmt,
         ...
 );
 
 static inline void
-log_default(
-        struct log_report  report,
-        const char        *msg
+stblog_default(
+        struct stblog_report  report,
+        const char           *msg
 ){
         const char *log_level[] = {"DEBUG", "INFO ", "WARN ", "ERROR", "FATAL"};
         const char *log_color[] = {
@@ -108,10 +108,10 @@ log_default(
 @brief Call either external logging system or internal logging 
  */
 static inline void
-log_emit(
-        struct log_logger *lg,
-        struct log_report  report,
-        const char        *fmt,
+stblog_emit(
+        struct stblog_logger *lg,
+        struct stblog_report  report,
+        const char           *fmt,
         ...
 ){
         char buf[256];
@@ -124,16 +124,16 @@ log_emit(
                 lg->handler(report, buf);
         }
         else {
-                log_default(report, buf);
+                stblog_default(report, buf);
         }
 }
 
 #ifndef DISABLE_LOGGING
-        #define LOG_ERRNO(logger, label, err, prio, fmt, ...)                      \
-                log_emit(                                                          \
-                        (logger),                                                  \
-                        (struct log_report){label, __FILE__, __LINE__, err, prio}, \
-                        fmt, ##__VA_ARGS__                                         \
+        #define LOG_ERRNO(logger, label, err, prio, fmt, ...)                          \
+                stblog_emit(                                                           \
+                        (logger),                                                      \
+                        (struct stblog_report){label, __FILE__, __LINE__, err, prio},  \
+                        fmt, ##__VA_ARGS__                                             \
                 )
 #else
         #define LOG_ERRNO(logger, label, err, prio, fmt, ...) \

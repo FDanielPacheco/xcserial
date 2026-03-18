@@ -1,0 +1,225 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.4" xml:lang="en-US">
+  <compounddef id="structserial__t" kind="struct" language="C++" prot="public">
+    <compoundname>serial_t</compoundname>
+    <includes local="no">xcserial.h</includes>
+      <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="structserial__t_1ac6c193ccf91c8892d37493bad344b608" prot="public" static="no" mutable="no">
+        <type>int</type>
+        <definition>int serial_t::fd</definition>
+        <argsstring></argsstring>
+        <name>fd</name>
+        <qualifiedname>serial_t::fd</qualifiedname>
+        <briefdescription>
+<para>File descriptor of the opened port. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="include/xcserial.h" line="218" column="33" bodyfile="include/xcserial.h" bodystart="218" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structserial__t_1a797a9d87277e35d3d4f45f6393d4d8d5" prot="public" static="no" mutable="no">
+        <type>struct <ref refid="structserial__config" kindref="compound">serial_config</ref></type>
+        <definition>struct serial_config serial_t::cfg</definition>
+        <argsstring></argsstring>
+        <name>cfg</name>
+        <qualifiedname>serial_t::cfg</qualifiedname>
+        <briefdescription>
+<para>Current port configuration. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="include/xcserial.h" line="219" column="28" bodyfile="include/xcserial.h" bodystart="219" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structserial__t_1af30dd69851dd4efece39db53844c96da" prot="public" static="no" mutable="no">
+        <type>struct <ref refid="structserial__udev" kindref="compound">serial_udev</ref></type>
+        <definition>struct serial_udev serial_t::udev</definition>
+        <argsstring></argsstring>
+        <name>udev</name>
+        <qualifiedname>serial_t::udev</qualifiedname>
+        <briefdescription>
+<para>Hardware identification data. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="include/xcserial.h" line="220" column="26" bodyfile="include/xcserial.h" bodystart="220" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structserial__t_1a79c72dafe6230be77150c4a9c05b443b" prot="public" static="no" mutable="no">
+        <type>struct <ref refid="structserial__epoll" kindref="compound">serial_epoll</ref></type>
+        <definition>struct serial_epoll serial_t::epoll</definition>
+        <argsstring></argsstring>
+        <name>epoll</name>
+        <qualifiedname>serial_t::epoll</qualifiedname>
+        <briefdescription>
+<para>Managed epoll instances for I/O monitoring. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="include/xcserial.h" line="221" column="27" bodyfile="include/xcserial.h" bodystart="221" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structserial__t_1ad0a2e0a6fe25af33e1965bf51c780a4d" prot="public" static="no" mutable="no">
+        <type>struct <ref refid="structserial__resv" kindref="compound">serial_resv</ref></type>
+        <definition>struct serial_resv serial_t::rsv</definition>
+        <argsstring></argsstring>
+        <name>rsv</name>
+        <qualifiedname>serial_t::rsv</qualifiedname>
+        <briefdescription>
+<para>Internal scratch buffer for formatted output. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="include/xcserial.h" line="222" column="26" bodyfile="include/xcserial.h" bodystart="222" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structserial__t_1a0fcc36586fa35504116e72849eb9ffc0" prot="public" static="no" mutable="no">
+        <type>struct stblog_logger</type>
+        <definition>struct stblog_logger serial_t::logger</definition>
+        <argsstring></argsstring>
+        <name>logger</name>
+        <qualifiedname>serial_t::logger</qualifiedname>
+        <briefdescription>
+<para>Associated logging handle. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="include/xcserial.h" line="223" column="28" bodyfile="include/xcserial.h" bodystart="223" bodyend="-1"/>
+      </memberdef>
+      </sectiondef>
+    <briefdescription>
+<para>The main serial handle. </para>
+    </briefdescription>
+    <detaileddescription>
+<para>This structure maintains the state of the connection, including epoll file descriptors for asynchronous waiting and the logger. </para>
+    </detaileddescription>
+    <collaborationgraph>
+      <node id="11">
+        <label>char</label>
+      </node>
+      <node id="4">
+        <label>enum serial_baudrate</label>
+      </node>
+      <node id="7">
+        <label>enum serial_databits</label>
+      </node>
+      <node id="5">
+        <label>enum serial_flowcontrol</label>
+      </node>
+      <node id="6">
+        <label>enum serial_parity</label>
+      </node>
+      <node id="8">
+        <label>enum serial_stopbits</label>
+      </node>
+      <node id="2">
+        <label>int</label>
+      </node>
+      <node id="3">
+        <label>serial_config</label>
+        <link refid="structserial__config"/>
+        <childnode refid="4" relation="usage">
+          <edgelabel>+baudrate</edgelabel>
+        </childnode>
+        <childnode refid="5" relation="usage">
+          <edgelabel>+flowcontrol</edgelabel>
+        </childnode>
+        <childnode refid="6" relation="usage">
+          <edgelabel>+parity</edgelabel>
+        </childnode>
+        <childnode refid="7" relation="usage">
+          <edgelabel>+databits</edgelabel>
+        </childnode>
+        <childnode refid="8" relation="usage">
+          <edgelabel>+stopbits</edgelabel>
+        </childnode>
+        <childnode refid="2" relation="usage">
+          <edgelabel>+timeout_ms</edgelabel>
+        </childnode>
+      </node>
+      <node id="13">
+        <label>serial_epoll</label>
+        <link refid="structserial__epoll"/>
+        <childnode refid="2" relation="usage">
+          <edgelabel>+rx</edgelabel>
+          <edgelabel>+tx</edgelabel>
+        </childnode>
+      </node>
+      <node id="14">
+        <label>serial_resv</label>
+        <link refid="structserial__resv"/>
+        <childnode refid="11" relation="usage">
+          <edgelabel>+label</edgelabel>
+          <edgelabel>+value</edgelabel>
+        </childnode>
+      </node>
+      <node id="1">
+        <label>serial_t</label>
+        <link refid="structserial__t"/>
+        <childnode refid="2" relation="usage">
+          <edgelabel>+fd</edgelabel>
+        </childnode>
+        <childnode refid="3" relation="usage">
+          <edgelabel>+cfg</edgelabel>
+        </childnode>
+        <childnode refid="9" relation="usage">
+          <edgelabel>+udev</edgelabel>
+        </childnode>
+        <childnode refid="13" relation="usage">
+          <edgelabel>+epoll</edgelabel>
+        </childnode>
+        <childnode refid="14" relation="usage">
+          <edgelabel>+rsv</edgelabel>
+        </childnode>
+        <childnode refid="15" relation="usage">
+          <edgelabel>+logger</edgelabel>
+        </childnode>
+      </node>
+      <node id="9">
+        <label>serial_udev</label>
+        <link refid="structserial__udev"/>
+        <childnode refid="10" relation="usage">
+          <edgelabel>+fields</edgelabel>
+        </childnode>
+        <childnode refid="12" relation="usage">
+          <edgelabel>+size</edgelabel>
+        </childnode>
+        <childnode refid="11" relation="usage">
+          <edgelabel>+bus</edgelabel>
+          <edgelabel>+path</edgelabel>
+        </childnode>
+      </node>
+      <node id="10">
+        <label>serial_udev_field</label>
+        <link refid="structserial__udev__field"/>
+        <childnode refid="11" relation="usage">
+          <edgelabel>+label</edgelabel>
+          <edgelabel>+value</edgelabel>
+        </childnode>
+      </node>
+      <node id="12">
+        <label>size_t</label>
+      </node>
+      <node id="15">
+        <label>struct stblog_logger</label>
+      </node>
+    </collaborationgraph>
+    <location file="include/xcserial.h" line="217" column="1" bodyfile="include/xcserial.h" bodystart="217" bodyend="224"/>
+    <listofallmembers>
+      <member refid="structserial__t_1a797a9d87277e35d3d4f45f6393d4d8d5" prot="public" virt="non-virtual"><scope>serial_t</scope><name>cfg</name></member>
+      <member refid="structserial__t_1a79c72dafe6230be77150c4a9c05b443b" prot="public" virt="non-virtual"><scope>serial_t</scope><name>epoll</name></member>
+      <member refid="structserial__t_1ac6c193ccf91c8892d37493bad344b608" prot="public" virt="non-virtual"><scope>serial_t</scope><name>fd</name></member>
+      <member refid="structserial__t_1a0fcc36586fa35504116e72849eb9ffc0" prot="public" virt="non-virtual"><scope>serial_t</scope><name>logger</name></member>
+      <member refid="structserial__t_1ad0a2e0a6fe25af33e1965bf51c780a4d" prot="public" virt="non-virtual"><scope>serial_t</scope><name>rsv</name></member>
+      <member refid="structserial__t_1af30dd69851dd4efece39db53844c96da" prot="public" virt="non-virtual"><scope>serial_t</scope><name>udev</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

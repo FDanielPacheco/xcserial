@@ -5,10 +5,9 @@
  *
  * @date      16-03-2026
  *  
- * @author    Fábio D. Pacheco, 
- * @email     fabio.d.pacheco@inesctec.pt or pacheco.castro.fabio@gmail.com
+ * @author    Fábio D. Pacheco (pacheco.castro.fabio@gmail.com)
  *
- *  @note
+ * @note
  *  xcserial - Serial Port Library for Linux
  *  Copyright (C) 2026 Fábio D. Pacheco 
  *
@@ -39,20 +38,25 @@
 #define XCSERIAL_H
 
 #include <stdint.h>
-
 #include <termios.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
 
-#include "log.h"
+#include "stblog.h"
 
 #ifdef __cplusplus  
 extern "C" {        
 #endif
 
+/** @brief Marker for invalid or uninitialized serial settings. */
 #define SERIAL_INV 0
+/** @brief Custom baudrate definition for 62.5k, common in specific industrial controllers. */
 #define B62500 10014
 
+/**
+ * @enum serial_baudrate
+ * @brief Standard and non-standard Linux baud rates.
+ */
 enum serial_baudrate {
         SERIAL_B50      = B50,     
         SERIAL_B75      = B75,     
@@ -83,30 +87,50 @@ enum serial_baudrate {
         SERIAL_B2000000 = B2000000,
 };
 
+/**
+ * @enum serial_parity
+ * @brief Parity bit configurations.
+ */
 enum serial_parity {
-        SERIAL_PN = 1,
-        SERIAL_PO,
-        SERIAL_PE,
+        SERIAL_PN = 1, //!< No parity
+        SERIAL_PO,     //!< Odd parity
+        SERIAL_PE,     //!< Even parity
 };
 
+/**
+ * @enum serial_flowcontrol
+ * @brief Flow control modes.
+ */
 enum serial_flowcontrol {
-        SERIAL_FLC_N = 1,
-        SERIAL_FLC_S,
-        SERIAL_FLC_H,
+        SERIAL_FLC_N = 1, //!< No flow control
+        SERIAL_FLC_S,     //!< Software flow control (XON/XOFF)
+        SERIAL_FLC_H,     //!< Hardware flow control (RTS/CTS)
 };
 
+/**
+ * @enum serial_databits
+ * @brief Number of bits per character.
+ */
 enum serial_databits {
-        SERIAL_DB8 = CS8,
-        SERIAL_DB7 = CS7, 
-        SERIAL_DB6 = CS6,
-        SERIAL_DB5 = CS5,
+        SERIAL_DB8 = CS8, //!< 8 data bits
+        SERIAL_DB7 = CS7, //!< 7 data bits
+        SERIAL_DB6 = CS6, //!< 6 data bits
+        SERIAL_DB5 = CS5, //!< 5 data bits
 };
 
+/**
+ * @enum serial_stopbits
+ * @brief Number of stop bits.
+ */
 enum serial_stopbits {
-        SERIAL_SB1 = 1,
-        SERIAL_SB2,
+        SERIAL_SB1 = 1, //!< 1 stop bit
+        SERIAL_SB2,     //!< 2 stop bits
 };
 
+/**
+ * @enum serial_line
+ * @brief Modem control line definitions using TIOCM constants.
+ */
 enum serial_line {
         SERIAL_DSR = TIOCM_LE,  //!< DSR - Data Set Ready 
         SERIAL_DTR = TIOCM_DTR, //!< DTR - Data Terminal Ready
@@ -115,159 +139,227 @@ enum serial_line {
         SERIAL_DCD = TIOCM_CAR, //!< DCD - Data Carrier Detected
 };
 
+/**
+ * @struct serial_line_state
+ * @brief Represents the state (on/off) of a single modem line.
+ */
 struct serial_line_state {
-        enum serial_line offs;
-        uint8_t          state;
+        enum serial_line offs;  //!< The line to target
+        uint8_t          state; //!< 1 for High/Set, 0 for Low/Clear
 };
 
+/**
+ * @struct serial_lines
+ * @brief Array wrapper for batch modem line operations.
+ */
 struct serial_lines {
-        struct serial_line_state *lines;
-        size_t                    size;
+        struct serial_line_state *lines; //!< Pointer to array of states
+        size_t                    size;  //!< Number of lines in the array
 };
 
+/**
+ * @struct serial_udev_field
+ * @brief Key-value pair for hardware identification via udev.
+ */
 struct serial_udev_field {
-        const char *label;
-        char        value[128];
+        const char *label;      //!< Field label (e.g., "ID_VENDOR_ID")
+        char        value[128]; //!< String value returned by udev
 };
 
+/**
+ * @struct serial_udev
+ * @brief Container for hardware metadata and persistent path tracking.
+ */
 struct serial_udev {
-        struct serial_udev_field *fields;
-        size_t                    size;
-        char                      bus[128];
-        char                      path[128];
+        struct serial_udev_field *fields;      //!< Custom fields to track
+        size_t                    size;        //!< Count of custom fields
+        char                      bus[128];    //!< Bus identifier
+        char                      path[128];   //!< Physical device path
 };
 
+/**
+ * @struct serial_config
+ * @brief Full communication parameters for a serial port.
+ */
 struct serial_config {
-        enum serial_baudrate    baudrate;
-        enum serial_flowcontrol flowcontrol;
-        enum serial_parity      parity;
-        enum serial_databits    databits;
-        enum serial_stopbits    stopbits;
-        int                     timeout_ms;
+        enum serial_baudrate     baudrate;     //!< Communication speed
+        enum serial_flowcontrol  flowcontrol;  //!< Flow control mode
+        enum serial_parity       parity;       //!< Parity check mode
+        enum serial_databits     databits;     //!< Bits per frame
+        enum serial_stopbits     stopbits;     //!< Stop bits
+        int                      timeout_ms;   //!< Default read/write timeout
 };
 
+/**
+ * @struct serial_epoll
+ * @brief Epoll file descriptors.
+ */
+struct serial_epoll {
+        int tx; 
+        int rx;
+};
+
+/**
+ * @struct serial_epoll
+ * @brief Epoll file descriptors.
+ */
+struct serial_resv {
+        char label[128]; 
+        char value[2048];        
+};
+
+/**
+ * @struct serial_t
+ * @brief The main serial handle. 
+ * @details This structure maintains the state of the connection, including
+ * epoll file descriptors for asynchronous waiting and the logger.
+ */
 typedef struct {
-        int                                      fd;
-        struct serial_config                     cfg;
-        struct serial_udev                       udev;
-        struct { int tx, rx; }                   epoll;
-        struct { char label[128], value[2048]; } rsv;
-        struct log_logger                        logger;
+        int                     fd;     //!< File descriptor of the opened port
+        struct serial_config    cfg;    //!< Current port configuration
+        struct serial_udev      udev;   //!< Hardware identification data
+        struct serial_epoll     epoll;  //!< Managed epoll instances for I/O monitoring
+        struct serial_resv      rsv;    //!< Internal scratch buffer for formatted output
+        struct stblog_logger    logger; //!< Associated logging handle
 } serial_t;
 
-int
-serial_open( 
-        serial_t   *serial, 
-        const char *pathname
-);
+/**
+ * @brief Opens a serial port.
+ * @param serial Pointer to serial handle.
+ * @param pathname System path to device (e.g., "/dev/ttyUSB0").
+ * @return 0 on success, negative error code on failure.
+ */
+int serial_open(serial_t *serial, const char *pathname);
 
-void 
-serial_close(
-        serial_t   *serial
-);
+/**
+ * @brief Closes the serial port and destroys internal epoll instances.
+ * @param serial Pointer to serial handle.
+ */
+void serial_close(serial_t *serial);
 
-int 
-serial_reopen(
-        serial_t   *serial
-);
+/**
+ * @brief Attempts to reopen the serial port using current handle metadata.
+ * @param serial Pointer to serial handle.
+ * @return 0 on success, negative error code on failure.
+ */
+int serial_reopen(serial_t *serial);
 
-int
-serial_set_timeout(
-        const int  timeout_ms,
-        serial_t  *serial
-);
+/**
+ * @brief Updates the default timeout for the serial handle.
+ * @param timeout_ms Timeout in milliseconds.
+ * @param serial Pointer to serial handle.
+ * @return 0 on success.
+ */
+int serial_set_timeout(const int timeout_ms, serial_t *serial);
 
-int 
-serial_set_config(
-        const struct serial_config *config,        
-        serial_t                   *serial
-);
+/**
+ * @brief Applies a full configuration to the hardware.
+ * @param config Pointer to the configuration struct.
+ * @param serial Pointer to serial handle.
+ * @return 0 on success, -1 on termios failure.
+ */
+int serial_set_config(const struct serial_config *config, serial_t *serial);
 
-const char *
-serial_get_config(
-        serial_t *serial,
-        int      *err 
-);
+/**
+ * @brief Returns a human-readable string of the current configuration.
+ * @param serial Pointer to serial handle.
+ * @param err Pointer to integer for error code storage.
+ * @return Pointer to internal string buffer.
+ */
+const char * serial_get_config(serial_t *serial, int *err);
 
-int 
-serial_default_config(
-        struct serial_config *config 
-);
+/**
+ * @brief Fills a config struct with standard defaults (9600 8N1).
+ * @param config Pointer to config struct to fill.
+ * @return 0 on success.
+ */
+int serial_default_config(struct serial_config *config);
 
-int
-serial_set_timeout(
-        const int  timeout_ms,
-        serial_t  *serial
-);
+/**
+ * @brief Returns the current timeout as a string.
+ * @param err Pointer to integer for error code storage.
+ * @param serial Pointer to serial handle.
+ * @return Formatted string of the timeout.
+ */
+const char * serial_get_timeout(int *err, serial_t *serial);
 
-const char * 
-serial_get_timeout(
-        int      *err,
-        serial_t *serial
-);
+/**
+ * @brief Standard read operation.
+ * @param buf Destination buffer.
+ * @param size Size of one element.
+ * @param nmemb Number of elements to read.
+ * @param timeout_ms Local timeout for this operation (-1 for non-blocking| 0 for internal timeout | 0< for specified timeout).
+ * @param serial Pointer to serial handle.
+ * @param err Pointer to integer for error code storage.
+ * @return Number of bytes read, or negative on failure.
+ */
+ssize_t serial_read(void *buf, const size_t size, const ssize_t nmemb, const int timeout_ms, serial_t *serial, int *err);
 
-ssize_t
-serial_read(
-        void          *buf,
-        const size_t   size, 
-        const ssize_t  nmemb, 
-        const int      timeout_ms,
-        serial_t      *serial,
-        int           *err
-);
+/**
+ * @brief Reads data until a specific delimiter sequence is found.
+ * @param buf Destination buffer.
+ * @param size Size of one element.
+ * @param nmemb Max elements to read.
+ * @param delim Delimiter sequence.
+ * @param nmemb_delim Size of delimiter sequence.
+ * @param timeout_ms Local timeout for this operation (-1 for non-blocking| 0 for internal timeout | 0< for specified timeout).
+ * @param serial Pointer to serial handle.
+ * @param err Pointer to integer for error code storage.
+ * @return Bytes read including delimiter.
+ */
+ssize_t serial_read_delim(void *buf, const size_t size, const ssize_t nmemb, const void *delim, const ssize_t nmemb_delim, const int timeout_ms, serial_t *serial, int *err);
 
-ssize_t
-serial_read_delim(
-        void          *buf,
-        const size_t   size,
-        const ssize_t  nmemb, 
-        const void    *delim,
-        const ssize_t  nmemb_delim, 
-        const int      timeout_ms,
-        serial_t      *serial,
-        int           *err
-);
+/**
+ * @brief Line-based read (reads until newline).
+ * @param buf Destination char buffer.
+ * @param length Maximum length to read.
+ * @param timeout_ms Local timeout for this operation (-1 for non-blocking| 0 for internal timeout | 0< for specified timeout).
+ * @param serial Pointer to serial handle.
+ * @param err Pointer to error code storage.
+ * @return Number of characters read.
+ */
+ssize_t serial_readl(char *buf, const ssize_t length, const int timeout_ms, serial_t *serial, int *err);
 
-ssize_t
-serial_readl(
-        char          *buf,
-        const ssize_t  length, 
-        const int      timeout_ms,
-        serial_t      *serial,
-        int           *err
-);
+/**
+ * @brief Writes data to the serial port.
+ * @param buf Source buffer.
+ * @param size Size of one element.
+ * @param nmemb Number of elements to write.
+ * @param serial Pointer to serial handle.
+ * @param timeout_ms Local timeout for this operation (-1 for non-blocking| 0 for internal timeout | 0< for specified timeout).
+ * @param err Pointer to error code storage.
+ * @return Number of bytes written.
+ */
+ssize_t serial_write(const void *buf, const size_t size, const ssize_t nmemb, serial_t *serial, const int timeout_ms, int *err);
 
-ssize_t
-serial_write(
-        const void    *buf,
-        const size_t   size, 
-        const ssize_t  nmemb, 
-        serial_t      *serial,
-        const int      timeout_ms,
-        int           *err
-);
+/**
+ * @brief Formatted write (printf-style) to the serial port.
+ * @param serial Pointer to serial handle.
+ * @param timeout_ms Local timeout for this operation (-1 for non-blocking| 0 for internal timeout | 0< for specified timeout).
+ * @param err Pointer to error code storage.
+ * @param fmt Format string.
+ * @param ... Variadic arguments.
+ * @return Number of bytes written.
+ */
+ssize_t serial_writef(serial_t *serial, const int timeout_ms, int *err, const char *fmt, ...);
 
-ssize_t 
-serial_writef( 
-        serial_t   *serial, 
-        const int  timeout_ms,
-        int        *err,
-        const char *fmt, 
-        ...
-);
+/**
+ * @brief Configures udev tracking parameters.
+ * @param params Pointer to udev configuration.
+ * @param serial Pointer to serial handle.
+ * @return 0 on success.
+ */
+int serial_set_udev(struct serial_udev *params, serial_t *serial);
 
-int
-serial_set_udev(
-        struct serial_udev *params,
-        serial_t           *serial
-);
+/**
+ * @brief Retrieves hardware info string via udev.
+ * @param serial Pointer to serial handle.
+ * @param err Pointer to error code storage.
+ * @return Formatted hardware info string.
+ */
+const char * serial_get_udev(int *err, serial_t *serial);
 
-const char *
-serial_get_udev(
-        serial_t *serial,
-        int      *err
-);
-
+/** @brief Macro list for generating getter/setter pairs. */
 #define SERIAL_LIST(f) \
         f(baudrate) \
         f(databits) \
@@ -275,28 +367,55 @@ serial_get_udev(
         f(flowcontrol) \
         f(parity) 
 
+/** @brief Helper macro to declare setters for individual config members. */
 #define SERIAL_SET_DECL_X(type) \
+        /** \
+         * @brief Sets serial port paramters. \
+         * @param val Value of type, refer to enum serial_##type. \
+         * @param serial Pointer to serial handle. \
+         * @return Formatted hardware info string. \
+         */ \
         int serial_set_##type(const enum serial_##type val, serial_t *serial);
+
+/** @brief Helper macro to declare getters for individual config members. */
 #define SERIAL_GET_DECL_X(type) \
+        /** \
+         * @brief Retrieves serial port parameters. \
+         * @param err Pointer to error code storage.
+         * @param serial Pointer to serial handle. \
+         * @return Formatted hardware info string. \
+         */ \
         const char *serial_get_##type(int *err, serial_t *serial);
 
 SERIAL_LIST(SERIAL_SET_DECL_X)
 SERIAL_LIST(SERIAL_GET_DECL_X)
 
-const char * 
-serial_get_lines( 
-        serial_t *serial 
-);
+/**
+ * @brief Retrieves the current status of all modem lines.
+ * @param serial Pointer to serial handle.
+ * @return String representation of line states.
+ */
+const char * serial_get_lines(serial_t *serial);
 
-int
-serial_set_lines(
-        const struct serial_lines *table,
-        serial_t                  *serial 
-);
+/**
+ * @brief Sets multiple modem lines simultaneously.
+ * @param table Pointer to line state table.
+ * @param serial Pointer to serial handle.
+ * @return 0 on success, -1 on ioctl failure.
+ */
+int serial_set_lines(const struct serial_lines *table, serial_t *serial);
+
+/**
+ * @brief Set single modem line.
+ * @param entry The line state entry.
+ * @param serial Pointer to serial handle.
+ * @return 0 on success, -1 on ioctl failure.
+ */
+int serial_set_line(struct serial_line_state entry, serial_t *serial);
+
 
 #ifdef __cplusplus  
 }        
 #endif
 
-
-#endif
+#endif /* XCSERIAL_H */

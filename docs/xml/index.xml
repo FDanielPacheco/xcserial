@@ -1,0 +1,136 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygenindex xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="index.xsd" version="1.9.4" xml:lang="en-US">
+  <compound refid="structserial__config" kind="struct"><name>serial_config</name>
+    <member refid="structserial__config_1ac0d486e3eb3a36ae0d224a083f275f19" kind="variable"><name>baudrate</name></member>
+    <member refid="structserial__config_1af9be008783a33da697de91381f6ee246" kind="variable"><name>flowcontrol</name></member>
+    <member refid="structserial__config_1a2985ce4a85f3d6a17fb11af07fa2a7c2" kind="variable"><name>parity</name></member>
+    <member refid="structserial__config_1adcb351a5803e7b75b5b2b2d0f21e4cb8" kind="variable"><name>databits</name></member>
+    <member refid="structserial__config_1a64cbb461dac9268de36750ddb50a099f" kind="variable"><name>stopbits</name></member>
+    <member refid="structserial__config_1a4ba70a481bc0928755df9b2950d126fb" kind="variable"><name>timeout_ms</name></member>
+  </compound>
+  <compound refid="structserial__epoll" kind="struct"><name>serial_epoll</name>
+    <member refid="structserial__epoll_1a241478a2c53f5e5fc3ac97e7c443a683" kind="variable"><name>tx</name></member>
+    <member refid="structserial__epoll_1a87f975242041012a97f87883adc1f101" kind="variable"><name>rx</name></member>
+  </compound>
+  <compound refid="structserial__line__state" kind="struct"><name>serial_line_state</name>
+    <member refid="structserial__line__state_1ac3a9ba2200eb4bf20936ce554db9606f" kind="variable"><name>offs</name></member>
+    <member refid="structserial__line__state_1a11b1049f28b609e4364eb06118a9975e" kind="variable"><name>state</name></member>
+  </compound>
+  <compound refid="structserial__lines" kind="struct"><name>serial_lines</name>
+    <member refid="structserial__lines_1a55c5d729c410efd9002717b631a9e28a" kind="variable"><name>lines</name></member>
+    <member refid="structserial__lines_1ae4529bf250d3e0d6f85bc19c071ee823" kind="variable"><name>size</name></member>
+  </compound>
+  <compound refid="structserial__resv" kind="struct"><name>serial_resv</name>
+    <member refid="structserial__resv_1aa29f69c21d04d4fb38cd2145852a50a4" kind="variable"><name>label</name></member>
+    <member refid="structserial__resv_1a2d8851a00477ffad220f85ab76716c4c" kind="variable"><name>value</name></member>
+  </compound>
+  <compound refid="structserial__t" kind="struct"><name>serial_t</name>
+    <member refid="structserial__t_1ac6c193ccf91c8892d37493bad344b608" kind="variable"><name>fd</name></member>
+    <member refid="structserial__t_1a797a9d87277e35d3d4f45f6393d4d8d5" kind="variable"><name>cfg</name></member>
+    <member refid="structserial__t_1af30dd69851dd4efece39db53844c96da" kind="variable"><name>udev</name></member>
+    <member refid="structserial__t_1a79c72dafe6230be77150c4a9c05b443b" kind="variable"><name>epoll</name></member>
+    <member refid="structserial__t_1ad0a2e0a6fe25af33e1965bf51c780a4d" kind="variable"><name>rsv</name></member>
+    <member refid="structserial__t_1a0fcc36586fa35504116e72849eb9ffc0" kind="variable"><name>logger</name></member>
+  </compound>
+  <compound refid="structserial__udev" kind="struct"><name>serial_udev</name>
+    <member refid="structserial__udev_1a9a51d9c7ed49d434ae9ba5cf6e9afc30" kind="variable"><name>fields</name></member>
+    <member refid="structserial__udev_1a61dd72288c1db9cd292eceaace63ccc9" kind="variable"><name>size</name></member>
+    <member refid="structserial__udev_1abbe68b6921dea1f378e31ce29a82eef9" kind="variable"><name>bus</name></member>
+    <member refid="structserial__udev_1aae339985a44cf7a77446ee1d28a1ec30" kind="variable"><name>path</name></member>
+  </compound>
+  <compound refid="structserial__udev__field" kind="struct"><name>serial_udev_field</name>
+    <member refid="structserial__udev__field_1ae104a5c38092683ffc7fccfa219beca8" kind="variable"><name>label</name></member>
+    <member refid="structserial__udev__field_1af679a4002062f5943da173eedc622bb8" kind="variable"><name>value</name></member>
+  </compound>
+  <compound refid="xcserial_8h" kind="file"><name>xcserial.h</name>
+    <member refid="xcserial_8h_1ac5aeb860b273055380370c7c4c6b061d" kind="define"><name>SERIAL_INV</name></member>
+    <member refid="xcserial_8h_1a808f67c377cd7e96994309d03a69b3de" kind="define"><name>B62500</name></member>
+    <member refid="xcserial_8h_1ae18de912f4390f9e16834627f5c1d095" kind="define"><name>SERIAL_LIST</name></member>
+    <member refid="xcserial_8h_1aef8b39a0e2aec90ac4d24d7b134e92b6" kind="define"><name>SERIAL_SET_DECL_X</name></member>
+    <member refid="xcserial_8h_1a85d0ab65fe6870925f31c68aa5eabf90" kind="define"><name>SERIAL_GET_DECL_X</name></member>
+    <member refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2" kind="enum"><name>serial_baudrate</name></member>
+    <member refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2ab788ed715b115dffb485fe3cd50a27f0" kind="enumvalue"><name>SERIAL_B50</name></member>
+    <member refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2a2691fcd161b7b85c8610477114966996" kind="enumvalue"><name>SERIAL_B75</name></member>
+    <member refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2a7b36a3242f84d548ebdd1442628fe99c" kind="enumvalue"><name>SERIAL_B110</name></member>
+    <member refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2ad6f156cecdfbdf8175271a69c6890770" kind="enumvalue"><name>SERIAL_B134</name></member>
+    <member refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2af818a676dd330ca2506135d81144d5de" kind="enumvalue"><name>SERIAL_B150</name></member>
+    <member refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2a30118e345369365d13d70d9cc45105c0" kind="enumvalue"><name>SERIAL_B200</name></member>
+    <member refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2a711449afefd5ea51898008599ee629c7" kind="enumvalue"><name>SERIAL_B300</name></member>
+    <member refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2ac8928da448b5d9ae9d1377b705bae431" kind="enumvalue"><name>SERIAL_B600</name></member>
+    <member refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2a3297ff4a72e079ff084c16013c09ec48" kind="enumvalue"><name>SERIAL_B1200</name></member>
+    <member refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2a035565f62f22f7550a7168daf0b05c3b" kind="enumvalue"><name>SERIAL_B1800</name></member>
+    <member refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2a0cbc22ba987c5f08a142edd692efcedb" kind="enumvalue"><name>SERIAL_B2400</name></member>
+    <member refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2ab186cfc1f5ae8398d47d0e579ab0cf51" kind="enumvalue"><name>SERIAL_B4800</name></member>
+    <member refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2a7dfe8b6a7a4bd7224e0d1640ddbbdb1d" kind="enumvalue"><name>SERIAL_B9600</name></member>
+    <member refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2acc3b374c86687bea94f8cbb501ea4591" kind="enumvalue"><name>SERIAL_B19200</name></member>
+    <member refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2ab23456c8b69ffae0e92421c24214f38b" kind="enumvalue"><name>SERIAL_B38400</name></member>
+    <member refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2a2749fa6790c004f5f06e694947366e3d" kind="enumvalue"><name>SERIAL_B57600</name></member>
+    <member refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2af5f0b466d52b0aae87925b6197b54d3f" kind="enumvalue"><name>SERIAL_B62500</name></member>
+    <member refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2ace36f03ec967fd6f1be33fdf6aaaef12" kind="enumvalue"><name>SERIAL_B115200</name></member>
+    <member refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2a7a0e159c8ce4ab1336de22bef0792cf1" kind="enumvalue"><name>SERIAL_B230400</name></member>
+    <member refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2a5cfc52b62491546edd9240c51241ac99" kind="enumvalue"><name>SERIAL_B460800</name></member>
+    <member refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2ab4804b940a8d5e268d64397680371baa" kind="enumvalue"><name>SERIAL_B500000</name></member>
+    <member refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2a42f0d7dedcb00a29e4cbe8a9e8739831" kind="enumvalue"><name>SERIAL_B576000</name></member>
+    <member refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2af05279c3f84709439cb8149ed2abb947" kind="enumvalue"><name>SERIAL_B921600</name></member>
+    <member refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2a089f2a917556d207a3259773b7abb24e" kind="enumvalue"><name>SERIAL_B1000000</name></member>
+    <member refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2aa45b86a943e4018d0e6d1eb78edfaa15" kind="enumvalue"><name>SERIAL_B1152000</name></member>
+    <member refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2ac42c9afcbbe77506a2175ab32e84b0cf" kind="enumvalue"><name>SERIAL_B1500000</name></member>
+    <member refid="xcserial_8h_1ae14474ba06f67967fa974fb396a052b2adf2d92501f9e2a4dfbf26fbbbea439dd" kind="enumvalue"><name>SERIAL_B2000000</name></member>
+    <member refid="xcserial_8h_1a2e0f91ff642506f81cf80f874bd66beb" kind="enum"><name>serial_parity</name></member>
+    <member refid="xcserial_8h_1a2e0f91ff642506f81cf80f874bd66beba4f97bfad563bd7102e9ec2234110ca9a" kind="enumvalue"><name>SERIAL_PN</name></member>
+    <member refid="xcserial_8h_1a2e0f91ff642506f81cf80f874bd66beba149daba819ef8f414f3d131ad0109d56" kind="enumvalue"><name>SERIAL_PO</name></member>
+    <member refid="xcserial_8h_1a2e0f91ff642506f81cf80f874bd66beba0286fbdb9a9d6d498f5a67936a929b95" kind="enumvalue"><name>SERIAL_PE</name></member>
+    <member refid="xcserial_8h_1af6e29976d192452d020e694d773bee23" kind="enum"><name>serial_flowcontrol</name></member>
+    <member refid="xcserial_8h_1af6e29976d192452d020e694d773bee23a775624453efdc87433784d4e144e681c" kind="enumvalue"><name>SERIAL_FLC_N</name></member>
+    <member refid="xcserial_8h_1af6e29976d192452d020e694d773bee23aac5ea902fdc57055305d48104cf09721" kind="enumvalue"><name>SERIAL_FLC_S</name></member>
+    <member refid="xcserial_8h_1af6e29976d192452d020e694d773bee23a76bc47afc2450392bd8dd0a313963256" kind="enumvalue"><name>SERIAL_FLC_H</name></member>
+    <member refid="xcserial_8h_1acd1b54b03cc6529cba303035e44e2644" kind="enum"><name>serial_databits</name></member>
+    <member refid="xcserial_8h_1acd1b54b03cc6529cba303035e44e2644a465c9695f73aac3824bbc917ca215285" kind="enumvalue"><name>SERIAL_DB8</name></member>
+    <member refid="xcserial_8h_1acd1b54b03cc6529cba303035e44e2644a1cef3859a1e5306a70fe902b9755d250" kind="enumvalue"><name>SERIAL_DB7</name></member>
+    <member refid="xcserial_8h_1acd1b54b03cc6529cba303035e44e2644afe18f77ccd99495072631d1348fc78ec" kind="enumvalue"><name>SERIAL_DB6</name></member>
+    <member refid="xcserial_8h_1acd1b54b03cc6529cba303035e44e2644a82baa2d258b203e1bc085f0a08f357ca" kind="enumvalue"><name>SERIAL_DB5</name></member>
+    <member refid="xcserial_8h_1a8d6db945930ac92b575bb87a82dc90bf" kind="enum"><name>serial_stopbits</name></member>
+    <member refid="xcserial_8h_1a8d6db945930ac92b575bb87a82dc90bfaea7ba0b2bb07f73b892269d8a1f760cc" kind="enumvalue"><name>SERIAL_SB1</name></member>
+    <member refid="xcserial_8h_1a8d6db945930ac92b575bb87a82dc90bfa01e37e0fb019796b9c25ef9b2f12d0b3" kind="enumvalue"><name>SERIAL_SB2</name></member>
+    <member refid="xcserial_8h_1ab626d5199c245e1288d7b48bc0f46f7c" kind="enum"><name>serial_line</name></member>
+    <member refid="xcserial_8h_1ab626d5199c245e1288d7b48bc0f46f7cadce35ccc0c20782ea25c475910e713fd" kind="enumvalue"><name>SERIAL_DSR</name></member>
+    <member refid="xcserial_8h_1ab626d5199c245e1288d7b48bc0f46f7ca8ab1203d7e51e31739bcad91748f4565" kind="enumvalue"><name>SERIAL_DTR</name></member>
+    <member refid="xcserial_8h_1ab626d5199c245e1288d7b48bc0f46f7ca9bf4e1218494372f34811dc75f5acf85" kind="enumvalue"><name>SERIAL_RTS</name></member>
+    <member refid="xcserial_8h_1ab626d5199c245e1288d7b48bc0f46f7caf102c50f8343a1bb6612195150ee1ae6" kind="enumvalue"><name>SERIAL_CTS</name></member>
+    <member refid="xcserial_8h_1ab626d5199c245e1288d7b48bc0f46f7ca464c6673f1b486d0f1fb40be8d2d72e9" kind="enumvalue"><name>SERIAL_DCD</name></member>
+    <member refid="xcserial_8h_1ab060ad2da01ecb2a14ee487dcc6ae212" kind="function"><name>serial_open</name></member>
+    <member refid="xcserial_8h_1ac3b22ef3219ed3d1f6443159c687fd7e" kind="function"><name>serial_close</name></member>
+    <member refid="xcserial_8h_1a9e5c93d67b14012df546cc4a6bdaeab5" kind="function"><name>serial_reopen</name></member>
+    <member refid="xcserial_8h_1aafe1271cb2e22872cf2c161b318e0ef9" kind="function"><name>serial_set_timeout</name></member>
+    <member refid="xcserial_8h_1a25aa4756aa1fe429c7d5b2f40b8d13e0" kind="function"><name>serial_set_config</name></member>
+    <member refid="xcserial_8h_1ac2a80c7a2555fdedbc18b6a09b8ef4d4" kind="function"><name>serial_get_config</name></member>
+    <member refid="xcserial_8h_1a15cf444f221f21af2012993210dcaffb" kind="function"><name>serial_default_config</name></member>
+    <member refid="xcserial_8h_1ad3838f6d02ad76b8483d269f88bbc05c" kind="function"><name>serial_get_timeout</name></member>
+    <member refid="xcserial_8h_1ad04fb48a838ceaeb4268a56341dfcdc7" kind="function"><name>serial_read</name></member>
+    <member refid="xcserial_8h_1a38e6c88f241c327ce8c28a06a5f4a123" kind="function"><name>serial_read_delim</name></member>
+    <member refid="xcserial_8h_1a0926e890054eae9215936ee7142d4f45" kind="function"><name>serial_readl</name></member>
+    <member refid="xcserial_8h_1a21258e1e088a1d20074d5e144ca5bb43" kind="function"><name>serial_write</name></member>
+    <member refid="xcserial_8h_1af3d09661690c4bde7616ac00ff95b928" kind="function"><name>serial_writef</name></member>
+    <member refid="xcserial_8h_1a45ea4ec5faca8d5efaff7806f03f6ffe" kind="function"><name>serial_set_udev</name></member>
+    <member refid="xcserial_8h_1a8ef6d77a362fd7676ff24a05dc8bbfa5" kind="function"><name>serial_get_udev</name></member>
+    <member refid="xcserial_8h_1a941d32ecd97696323b1e30d95a7dd85e" kind="function"><name>serial_set_baudrate</name></member>
+    <member refid="xcserial_8h_1a3e40413bb3a6b7a875ef56db5748ec6e" kind="function"><name>serial_set_databits</name></member>
+    <member refid="xcserial_8h_1a6d077ed1bc380da52c0d2ef3d1806b42" kind="function"><name>serial_set_stopbits</name></member>
+    <member refid="xcserial_8h_1a79adca26377467f7659f755c311f41af" kind="function"><name>serial_set_flowcontrol</name></member>
+    <member refid="xcserial_8h_1a6506717628fdf900455108c575f41f8d" kind="function"><name>serial_set_parity</name></member>
+    <member refid="xcserial_8h_1ac57d7da31801a50722e1dbf853a0e3ef" kind="function"><name>serial_get_baudrate</name></member>
+    <member refid="xcserial_8h_1a77889aaea8a0d52128b8761f6360b7e7" kind="function"><name>serial_get_databits</name></member>
+    <member refid="xcserial_8h_1a35586816427360878411c98150bbe430" kind="function"><name>serial_get_stopbits</name></member>
+    <member refid="xcserial_8h_1ae75ec2e952c9654986346fef6059dacd" kind="function"><name>serial_get_flowcontrol</name></member>
+    <member refid="xcserial_8h_1a347264a665704d8c57239b15727983a6" kind="function"><name>serial_get_parity</name></member>
+    <member refid="xcserial_8h_1a415aa9031f0a7c7737af6056a66b11d1" kind="function"><name>serial_get_lines</name></member>
+    <member refid="xcserial_8h_1acd37b0ee739ac1637d02cf76ffe3fc88" kind="function"><name>serial_set_lines</name></member>
+    <member refid="xcserial_8h_1a4ec3d0506a063d6ecca160ec778bd2e1" kind="function"><name>serial_set_line</name></member>
+  </compound>
+  <compound refid="README_8md" kind="file"><name>README.md</name>
+  </compound>
+  <compound refid="dir_d44c64559bbebec7f509842c48db8b23" kind="dir"><name>include</name>
+  </compound>
+  <compound refid="indexpage" kind="page"><name>index</name>
+  </compound>
+</doxygenindex>

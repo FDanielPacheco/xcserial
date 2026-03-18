@@ -1,0 +1,282 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.4" xml:lang="en-US">
+  <compounddef id="indexpage" kind="page">
+    <compoundname>index</compoundname>
+    <title>xcserial: High-Performance Linux Serial Port Library</title>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para><anchor id="index_1md_README"/> <computeroutput>xcserial</computeroutput> is a lightweight, user-space C library designed for non-canonical serial port communication on Linux. It abstracts low-level <computeroutput>termios</computeroutput> and <computeroutput>ioctl</computeroutput> operations, providing a robust interface for high-frequency data exchange and hardware-level device management.</para>
+<para>The library utilizes the Linux <computeroutput>epoll</computeroutput> subsystem to achieve efficient I/O multiplexing, ensuring minimal CPU utilization during blocking operations. A primary feature is its device resilience, which utilizes <computeroutput>udev</computeroutput> metadata to enable automatic port restoration following physical disconnection or hotplug events.</para>
+<para>The architecture has been validated through extensive deployment in scientific robotics prototypes, specifically for autonomous underwater and mobile platforms.</para>
+<para><hruler/>
+</para>
+<sect1 id="index_1autotoc_md2">
+<title>Installation</title>
+<sect2 id="index_1autotoc_md3">
+<title>System Requirements</title>
+<para>The library depends on the following system components:<itemizedlist>
+<listitem><para>Standard C Library (ISO C99/C11/C23)</para>
+</listitem><listitem><para>libudev (Hardware abstraction layer)</para>
+</listitem></itemizedlist>
+</para>
+<para>On Debian-based systems: <programlisting filename=".bash"><codeline><highlight class="normal">sudo<sp/>apt<sp/>install<sp/>build-essential<sp/>libudev-dev<sp/>clang<sp/>llvm</highlight></codeline>
+</programlisting></para>
+</sect2>
+<sect2 id="index_1autotoc_md4">
+<title>Build from Source</title>
+<para>The build system utilizes a Clang/LLVM toolchain for optimized machine code generation and cross-compilation support (<ulink url="https://clang.llvm.org/">clang</ulink>).</para>
+<para><orderedlist>
+<listitem><para>Compilation for Host Architecture: <programlisting filename=".bash"><codeline><highlight class="normal">make</highlight></codeline>
+</programlisting></para>
+</listitem><listitem><para>Cross-Compilation: Target specific architectures using the <computeroutput>ARCH</computeroutput> variable to invoke the corresponding LLVM triple. <programlisting filename=".bash"><codeline><highlight class="normal">make<sp/>ARCH=arm<sp/><sp/><sp/><sp/><sp/><sp/>#<sp/>ARM-hf<sp/><sp/>(e.g.,<sp/>Raspberry<sp/>Pi<sp/>32-bit)</highlight></codeline>
+<codeline><highlight class="normal">make<sp/>ARCH=aarch64<sp/><sp/>#<sp/>AArch64<sp/>(e.g.,<sp/>Raspberry<sp/>Pi<sp/>5,<sp/>Jetson)</highlight></codeline>
+</programlisting></para>
+</listitem><listitem><para>Release Generation: To generate a distribution package including headers, libraries, a <computeroutput>pkg-config</computeroutput> file, and an installation script: <programlisting filename=".bash"><codeline><highlight class="normal">make<sp/>release<sp/>ARCH=&lt;target_arch&gt;</highlight></codeline>
+</programlisting></para>
+</listitem></orderedlist>
+</para>
+<para><hruler/>
+</para>
+</sect2>
+</sect1>
+<sect1 id="index_1autotoc_md6">
+<title>Usage Examples</title>
+<para>The following examples progressively demonstrate the library&apos;s capabilities, from basic string I/O to advanced hardware tracking. In all examples, a timeout value of <computeroutput>0</computeroutput> directs the API to use the default internal timeout defined during configuration.</para>
+<sect2 id="index_1autotoc_md7">
+<title>1. Simple String I/O</title>
+<para>The most common use case: writing a formatted text command and reading a newline-terminated response.</para>
+<para><programlisting filename=".c"><codeline><highlight class="preprocessor">#include<sp/>&lt;<ref refid="xcserial_8h" kindref="compound">xcserial.h</ref>&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;stdlib.h&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;string.h&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"></highlight><highlight class="keywordtype">int</highlight><highlight class="normal"><sp/>main(</highlight><highlight class="keywordtype">void</highlight><highlight class="normal">)<sp/>{</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="structserial__t" kindref="compound">serial_t</ref><sp/>serial;</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordtype">int</highlight><highlight class="normal"><sp/>err<sp/>=<sp/>0;</highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>err<sp/>=<sp/><ref refid="xcserial_8h_1ab060ad2da01ecb2a14ee487dcc6ae212" kindref="member">serial_open</ref>(&amp;serial,<sp/></highlight><highlight class="stringliteral">&quot;/dev/ttyUSB0&quot;</highlight><highlight class="normal">);</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/>(0<sp/>&gt;<sp/>)<sp/>{</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>strerror(-err);</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/>EXIT_FAILURE;</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="comment">//<sp/>Configure<sp/>the<sp/>serial<sp/>port<sp/>with<sp/>115200<sp/>bps<sp/>and<sp/>100<sp/>ms<sp/>timeout<sp/>for<sp/>IO</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="xcserial_8h_1a941d32ecd97696323b1e30d95a7dd85e" kindref="member">serial_set_baudrate</ref>(SERIAL_B115200,<sp/>&amp;serial);</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="xcserial_8h_1aafe1271cb2e22872cf2c161b318e0ef9" kindref="member">serial_set_timeout</ref>(100,<sp/>&amp;serial);</highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="comment">//<sp/>Write<sp/>a<sp/>formatted<sp/>string</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="xcserial_8h_1af3d09661690c4bde7616ac00ff95b928" kindref="member">serial_writef</ref>(&amp;serial,<sp/>0,<sp/>&amp;err,<sp/></highlight><highlight class="stringliteral">&quot;REQ_TEMP_ID:%d\n&quot;</highlight><highlight class="normal">,<sp/>1);</highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="comment">//<sp/>Read<sp/>until<sp/>newline<sp/>character</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/>rx_buf[128];</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>ssize_t<sp/>bytes_read<sp/>=<sp/><ref refid="xcserial_8h_1a0926e890054eae9215936ee7142d4f45" kindref="member">serial_readl</ref>(rx_buf,<sp/></highlight><highlight class="keyword">sizeof</highlight><highlight class="normal">(rx_buf),<sp/>0,<sp/>&amp;serial,<sp/>&amp;err);</highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="xcserial_8h_1ac3b22ef3219ed3d1f6443159c687fd7e" kindref="member">serial_close</ref>(&amp;serial);</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/>0;</highlight></codeline>
+<codeline><highlight class="normal">}</highlight></codeline>
+</programlisting></para>
+</sect2>
+<sect2 id="index_1autotoc_md8">
+<title>2. Raw Binary I/O</title>
+<para>For fixed-size packets or device control protocols, standard read/write can be used.</para>
+<para><programlisting filename=".c"><codeline><highlight class="comment">//<sp/>...<sp/>Initialization<sp/>...</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"></highlight><highlight class="comment">//<sp/>Sending<sp/>a<sp/>3-byte<sp/>binary<sp/>command</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal">uint8_t<sp/>tx_buf[]<sp/>=<sp/>{<sp/>0x01,<sp/>0xFF,<sp/>0x0A<sp/>};</highlight></codeline>
+<codeline><highlight class="normal"><ref refid="xcserial_8h_1a21258e1e088a1d20074d5e144ca5bb43" kindref="member">serial_write</ref>(tx_buf,<sp/></highlight><highlight class="keyword">sizeof</highlight><highlight class="normal">(uint8_t),<sp/>3,<sp/>&amp;serial,<sp/>0,<sp/>&amp;err);</highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"></highlight><highlight class="comment">//<sp/>Reading<sp/>a<sp/>known<sp/>16-byte<sp/>fixed<sp/>payload</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal">uint8_t<sp/>rx_buf[16];</highlight></codeline>
+<codeline><highlight class="normal">ssize_t<sp/>bytes_read<sp/>=<sp/><ref refid="xcserial_8h_1ad04fb48a838ceaeb4268a56341dfcdc7" kindref="member">serial_read</ref>(rx_buf,<sp/></highlight><highlight class="keyword">sizeof</highlight><highlight class="normal">(uint8_t),<sp/>16,<sp/>0,<sp/>&amp;serial,<sp/>&amp;err);</highlight></codeline>
+</programlisting></para>
+</sect2>
+<sect2 id="index_1autotoc_md9">
+<title>3. Complex Delimiter Parsing</title>
+<para>Some industrial protocols do not rely on a single newline, but rather a sequence of bytes to denote the end of a frame (EOF). <computeroutput><ref refid="xcserial_8h_1a38e6c88f241c327ce8c28a06a5f4a123" kindref="member">serial_read_delim()</ref></computeroutput> handles multi-byte termination sequences. Additionally, instead of using the internal timeout defined with <computeroutput><ref refid="xcserial_8h_1aafe1271cb2e22872cf2c161b318e0ef9" kindref="member">serial_set_timeout()</ref></computeroutput> a custom timeout with 1 s is used.</para>
+<para><programlisting filename=".c"><codeline><highlight class="comment">//<sp/>...<sp/>Initialization<sp/>...</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal">uint8_t<sp/>rx_buf[1024];</highlight></codeline>
+<codeline><highlight class="normal"></highlight><highlight class="comment">//<sp/>Protocol<sp/>frame<sp/>ends<sp/>with<sp/>the<sp/>specific<sp/>sequence:<sp/>0xA1,<sp/>0xA2,<sp/>0xA3</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal">uint8_t<sp/>delimiter[]<sp/>=<sp/>{<sp/>0xA1,<sp/>0xA2,<sp/>0xA3<sp/>};</highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"></highlight><highlight class="comment">//<sp/>Read<sp/>data<sp/>continuously<sp/>until<sp/>the<sp/>3-byte<sp/>delimiter<sp/>is<sp/>matched,<sp/></highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"></highlight><highlight class="comment">//<sp/>the<sp/>buffer<sp/>fills,<sp/>or<sp/>the<sp/>timeout<sp/>occurs.</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"></highlight><highlight class="keywordtype">int</highlight><highlight class="normal"><sp/>timeout<sp/>=<sp/>1000;</highlight></codeline>
+<codeline><highlight class="normal">ssize_t<sp/>frame_len<sp/>=<sp/><ref refid="xcserial_8h_1a38e6c88f241c327ce8c28a06a5f4a123" kindref="member">serial_read_delim</ref>(</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>rx_buf,<sp/></highlight><highlight class="keyword">sizeof</highlight><highlight class="normal">(uint8_t),<sp/></highlight><highlight class="keyword">sizeof</highlight><highlight class="normal">(rx_buf),<sp/></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>delimiter,<sp/>3,<sp/></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>timeout,<sp/></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>&amp;serial,<sp/>&amp;err</highlight></codeline>
+<codeline><highlight class="normal">);</highlight></codeline>
+</programlisting></para>
+</sect2>
+<sect2 id="index_1autotoc_md10">
+<title>4. Hardware Resilience and Hotplugging</title>
+<para>To ensure connectivity across device re-enumeration (e.g., if a USB cable is bumped and the node changes from <computeroutput>/dev/ttyUSB0</computeroutput> to <computeroutput>/dev/ttyUSB1</computeroutput>), <computeroutput>xcserial</computeroutput> can track devices via hardware-specific <computeroutput>udev</computeroutput> attributes.</para>
+<para><programlisting filename=".c"><codeline><highlight class="comment">//<sp/>...<sp/>Initialization<sp/>...</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"></highlight><highlight class="comment">//<sp/>Define<sp/>hardware-specific<sp/>fields<sp/>to<sp/>uniquely<sp/>identify<sp/>the<sp/>device</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"></highlight><highlight class="keyword">struct<sp/></highlight><highlight class="normal"><ref refid="structserial__udev__field" kindref="compound">serial_udev_field</ref><sp/>fields[]<sp/>=<sp/>{</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>{.<ref refid="structserial__udev__field_1ae104a5c38092683ffc7fccfa219beca8" kindref="member">label</ref><sp/>=<sp/></highlight><highlight class="stringliteral">&quot;ID_VENDOR_ID&quot;</highlight><highlight class="normal">},</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>{.label<sp/>=<sp/></highlight><highlight class="stringliteral">&quot;ID_MODEL_ID&quot;</highlight><highlight class="normal">},</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>{.label<sp/>=<sp/></highlight><highlight class="stringliteral">&quot;ID_SERIAL_SHORT&quot;</highlight><highlight class="normal">}</highlight></codeline>
+<codeline><highlight class="normal">};</highlight></codeline>
+<codeline><highlight class="normal"></highlight><highlight class="keyword">struct<sp/></highlight><highlight class="normal"><ref refid="structserial__udev" kindref="compound">serial_udev</ref><sp/>u_cfg<sp/>=<sp/>{</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>.<ref refid="structserial__udev_1a9a51d9c7ed49d434ae9ba5cf6e9afc30" kindref="member">fields</ref><sp/>=<sp/><ref refid="structserial__udev_1a9a51d9c7ed49d434ae9ba5cf6e9afc30" kindref="member">fields</ref>,</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>.size<sp/>=<sp/>3</highlight></codeline>
+<codeline><highlight class="normal">};</highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"></highlight><highlight class="comment">//<sp/>Attach<sp/>udev<sp/>parameters<sp/>to<sp/>the<sp/>serial<sp/>handle</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><ref refid="xcserial_8h_1a45ea4ec5faca8d5efaff7806f03f6ffe" kindref="member">serial_set_udev</ref>(&amp;u_cfg,<sp/>&amp;serial);</highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"></highlight><highlight class="comment">//<sp/>Main<sp/>application<sp/>loop</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"></highlight><highlight class="keywordflow">for</highlight><highlight class="normal"><sp/>(<sp/>;<sp/>;<sp/>)<sp/>{</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="comment">//<sp/>Attempt<sp/>a<sp/>read<sp/>operation...</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/>(<ref refid="xcserial_8h_1ad04fb48a838ceaeb4268a56341dfcdc7" kindref="member">serial_read</ref>(<sp/>...,<sp/>&amp;err)<sp/>&lt;<sp/>0)<sp/>{</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="comment">//<sp/>If<sp/>the<sp/>physical<sp/>device<sp/>is<sp/>lost<sp/>or<sp/>disconnected:</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/>(<sp/>!<ref refid="xcserial_8h_1a9e5c93d67b14012df546cc4a6bdaeab5" kindref="member">serial_reopen</ref>(&amp;serial)<sp/>)<sp/>{</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="comment">//<sp/>The<sp/>library<sp/>successfully<sp/>matched<sp/>the<sp/>udev<sp/>parameters,<sp/></highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="comment">//<sp/>found<sp/>the<sp/>new<sp/>sysfs<sp/>path,<sp/>and<sp/>restored<sp/>communication.</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">continue</highlight><highlight class="normal">;<sp/></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline><highlight class="normal">}</highlight></codeline>
+</programlisting></para>
+</sect2>
+<sect2 id="index_1autotoc_md11">
+<title>5. Modem Line Control</title>
+<para>The library provides direct low-level access to the physical modem control lines for hardware handshaking or custom signaling (e.g., RS-485 transceiver direction control or forcing a hardware reset).</para>
+<para><programlisting filename=".c"><codeline><highlight class="comment">//<sp/>...<sp/>Initialization<sp/>...</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"></highlight><highlight class="comment">//<sp/>Set<sp/>Data<sp/>Terminal<sp/>Ready<sp/>(DTR)<sp/>HIGH<sp/>and<sp/>Request<sp/>To<sp/>Send<sp/>(RTS)<sp/>LOW</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"></highlight><highlight class="keyword">struct<sp/></highlight><highlight class="normal"><ref refid="structserial__line__state" kindref="compound">serial_line_state</ref><sp/>states[]<sp/>=<sp/>{</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>{<ref refid="xcserial_8h_1ab626d5199c245e1288d7b48bc0f46f7ca8ab1203d7e51e31739bcad91748f4565" kindref="member">SERIAL_DTR</ref>,<sp/>1},</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>{<ref refid="xcserial_8h_1ab626d5199c245e1288d7b48bc0f46f7ca9bf4e1218494372f34811dc75f5acf85" kindref="member">SERIAL_RTS</ref>,<sp/>0}</highlight></codeline>
+<codeline><highlight class="normal">};</highlight></codeline>
+<codeline><highlight class="normal"></highlight><highlight class="keyword">struct<sp/></highlight><highlight class="normal"><ref refid="structserial__lines" kindref="compound">serial_lines</ref><sp/>table<sp/>=<sp/>{<sp/></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>.<ref refid="structserial__lines_1a55c5d729c410efd9002717b631a9e28a" kindref="member">lines</ref><sp/>=<sp/>states,<sp/></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>.size<sp/>=<sp/>2<sp/></highlight></codeline>
+<codeline><highlight class="normal">};</highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"></highlight><highlight class="comment">//<sp/>Apply<sp/>states<sp/>to<sp/>the<sp/>hardware<sp/>pins</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><ref refid="xcserial_8h_1acd37b0ee739ac1637d02cf76ffe3fc88" kindref="member">serial_set_lines</ref>(&amp;table,<sp/>&amp;serial);</highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"></highlight><highlight class="comment">//<sp/>Retrieve<sp/>and<sp/>log<sp/>current<sp/>line<sp/>states</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/>*line_status<sp/>=<sp/><ref refid="xcserial_8h_1a415aa9031f0a7c7737af6056a66b11d1" kindref="member">serial_get_lines</ref>(&amp;serial);</highlight></codeline>
+</programlisting></para>
+</sect2>
+<sect2 id="index_1autotoc_md12">
+<title>6. External Integration</title>
+<para>The library supports external integration of the serial object with an external <computeroutput>epoll</computeroutput> or any file descriptor dependent library, as demonstrated by the example below, since the <computeroutput><ref refid="structserial__t" kindref="compound">serial_t</ref></computeroutput> object has a file descriptor at <computeroutput>serial-&gt;fd</computeroutput>.</para>
+<para><programlisting filename=".c"><codeline><highlight class="keywordtype">int</highlight><highlight class="normal"><sp/>main(</highlight><highlight class="keywordtype">void</highlight><highlight class="normal">)<sp/>{</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="structserial__t" kindref="compound">serial_t</ref><sp/>ser;</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordtype">int</highlight><highlight class="normal"><sp/>epoll_fd,<sp/>t_fd,<sp/>sig_fd;</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keyword">struct<sp/></highlight><highlight class="normal">epoll_event<sp/>ev,<sp/>events[MAX_EVENTS];</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>sigset_t<sp/>mask;</highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="comment">//<sp/>Initialize<sp/>xcserial</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/>(<ref refid="xcserial_8h_1ab060ad2da01ecb2a14ee487dcc6ae212" kindref="member">serial_open</ref>(&amp;ser,<sp/></highlight><highlight class="stringliteral">&quot;/dev/ttyACM0&quot;</highlight><highlight class="normal">)<sp/>&lt;<sp/>0)<sp/></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/>EXIT_FAILURE;</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="xcserial_8h_1a941d32ecd97696323b1e30d95a7dd85e" kindref="member">serial_set_baudrate</ref>(SERIAL_B115200,<sp/>&amp;ser);</highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="comment">//<sp/>Setup<sp/>Signal<sp/>Handling<sp/>(SIGINT)</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>sigemptyset(&amp;mask);</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>sigaddset(&amp;mask,<sp/>SIGINT);</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>sigprocmask(SIG_BLOCK,<sp/>&amp;mask,<sp/>NULL);</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>sig_fd<sp/>=<sp/>signalfd(-1,<sp/>&amp;mask,<sp/>0);</highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="comment">//<sp/>Setup<sp/>a<sp/>Periodic<sp/>Timer<sp/>(1<sp/>second)</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>t_fd<sp/>=<sp/>timerfd_create(CLOCK_MONOTONIC,<sp/>0);</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keyword">struct<sp/></highlight><highlight class="normal">itimerspec<sp/>period<sp/>=<sp/>{<sp/>{1,<sp/>0},<sp/>{1,<sp/>0}<sp/>};</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>timerfd_settime(t_fd,<sp/>0,<sp/>&amp;period,<sp/>NULL);</highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="comment">//<sp/>Create<sp/>Global<sp/>Epoll<sp/>Instance</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>epoll_fd<sp/>=<sp/>epoll_create1(0);</highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="comment">//<sp/>Register<sp/>Serial<sp/>RX</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>ev.events<sp/>=<sp/>EPOLLIN;<sp/>ev.data.fd<sp/>=<sp/>ser.<ref refid="structserial__t_1ac6c193ccf91c8892d37493bad344b608" kindref="member">fd</ref>;</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>epoll_ctl(epoll_fd,<sp/>EPOLL_CTL_ADD,<sp/>ser.<ref refid="structserial__t_1ac6c193ccf91c8892d37493bad344b608" kindref="member">fd</ref>,<sp/>&amp;ev);</highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="comment">//<sp/>Register<sp/>Timer</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>ev.events<sp/>=<sp/>EPOLLIN;<sp/>ev.data.fd<sp/>=<sp/>t_fd;</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>epoll_ctl(epoll_fd,<sp/>EPOLL_CTL_ADD,<sp/>t_fd,<sp/>&amp;ev);</highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="comment">//<sp/>Register<sp/>Signal</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>ev.events<sp/>=<sp/>EPOLLIN;<sp/>ev.data.fd<sp/>=<sp/>sig_fd;</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>epoll_ctl(epoll_fd,<sp/>EPOLL_CTL_ADD,<sp/>sig_fd,<sp/>&amp;ev);</highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>printf(</highlight><highlight class="stringliteral">&quot;Event<sp/>loop<sp/>started.<sp/>Press<sp/>Ctrl+C<sp/>to<sp/>exit.\n&quot;</highlight><highlight class="normal">);</highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordtype">int</highlight><highlight class="normal"><sp/>run<sp/>=<sp/>1;</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">while</highlight><highlight class="normal"><sp/>(run)<sp/>{</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordtype">int</highlight><highlight class="normal"><sp/>nfds<sp/>=<sp/>epoll_wait(epoll_fd,<sp/>events,<sp/>MAX_EVENTS,<sp/>-1);</highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">for</highlight><highlight class="normal"><sp/>(</highlight><highlight class="keywordtype">int</highlight><highlight class="normal"><sp/>i<sp/>=<sp/>0;<sp/>i<sp/>&lt;<sp/>nfds;<sp/>i++)<sp/>{</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="comment">//<sp/>HANDLE<sp/>SERIAL<sp/>DATA</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/>(events[i].data.fd<sp/>==<sp/>ser.<ref refid="structserial__t_1ac6c193ccf91c8892d37493bad344b608" kindref="member">fd</ref>)<sp/>{</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/>buf[256];</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordtype">int</highlight><highlight class="normal"><sp/>err<sp/>=<sp/>0;</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="comment">//<sp/>Passing<sp/>-1<sp/>ensures<sp/>direct<sp/>read()<sp/>access<sp/>without<sp/>internal<sp/>epoll<sp/>blocking</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>ssize_t<sp/>n<sp/>=<sp/><ref refid="xcserial_8h_1ad04fb48a838ceaeb4268a56341dfcdc7" kindref="member">serial_read</ref>(buf,<sp/>1,<sp/></highlight><highlight class="keyword">sizeof</highlight><highlight class="normal">(buf)<sp/>-<sp/>1,<sp/>-1,<sp/>&amp;ser,<sp/>&amp;err);</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/>(n<sp/>&gt;<sp/>0)<sp/>{</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>buf[n]<sp/>=<sp/></highlight><highlight class="charliteral">&apos;\0&apos;</highlight><highlight class="normal">;</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>printf(</highlight><highlight class="stringliteral">&quot;[SERIAL]<sp/>Received:<sp/>%s&quot;</highlight><highlight class="normal">,<sp/>buf);</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="comment">//<sp/>HANDLE<sp/>TIMER</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">else</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/>(events[i].data.fd<sp/>==<sp/>t_fd)<sp/>{</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>uint64_t<sp/>miss;</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>read(t_fd,<sp/>&amp;miss,<sp/></highlight><highlight class="keyword">sizeof</highlight><highlight class="normal">(miss));</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>printf(</highlight><highlight class="stringliteral">&quot;[TIMER]<sp/>1s<sp/>Heartbeat<sp/>-<sp/>Sending<sp/>Telemetry...\n&quot;</highlight><highlight class="normal">);</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="xcserial_8h_1af3d09661690c4bde7616ac00ff95b928" kindref="member">serial_writef</ref>(&amp;ser,<sp/>-1,<sp/>NULL,<sp/></highlight><highlight class="stringliteral">&quot;HB_STAT:OK\n&quot;</highlight><highlight class="normal">);</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="comment">//<sp/>HANDLE<sp/>SIGNAL</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">else</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/>(events[i].data.fd<sp/>==<sp/>sig_fd)<sp/>{</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>printf(</highlight><highlight class="stringliteral">&quot;\n[SIGNAL]<sp/>SIGINT<sp/>received.<sp/>Shutting<sp/>down.\n&quot;</highlight><highlight class="normal">);</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>run<sp/>=<sp/>0;</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>close(sig_fd);</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>close(t_fd);</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>close(epoll_fd);</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="xcserial_8h_1ac3b22ef3219ed3d1f6443159c687fd7e" kindref="member">serial_close</ref>(&amp;ser);</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/>0;</highlight></codeline>
+<codeline><highlight class="normal">}</highlight></codeline>
+</programlisting></para>
+<para><hruler/>
+</para>
+</sect2>
+</sect1>
+<sect1 id="index_1autotoc_md14">
+<title>Documentation</title>
+<para>API documentation generation (from xcserial directory) via (<ulink url="https://www.doxygen.nl/">Doxygen</ulink>)</para>
+<para>Generation: <programlisting filename=".bash"><codeline><highlight class="normal">make<sp/>docs</highlight></codeline>
+</programlisting></para>
+<para>Accessing MAN Pages: <programlisting filename=".bash"><codeline><highlight class="normal">man<sp/>./docs/man/man3/xcserial.h.3</highlight></codeline>
+</programlisting> Accessing Doxygen HTML interface: <programlisting filename=".bash"><codeline><highlight class="normal">&lt;html-viewer&gt;<sp/>./docs/html/index.html</highlight></codeline>
+</programlisting></para>
+<para>Technical References:<itemizedlist>
+<listitem><para><ulink url="https://man7.org/linux/man-pages/man2/TIOCMSET.2const.html">Linux TIOCM Control Consts</ulink></para>
+</listitem><listitem><para><ulink url="https://people.na.infn.it/~garufi/didattica/CorsoAcq/SerialProgrammingInPosixOSs.pdf">POSIX Serial Programming</ulink></para>
+</listitem><listitem><para><ulink url="https://www.kernel.org/pub/linux/utils/kernel/hotplug/udev/udev.html">Linux udev Documentation</ulink></para>
+</listitem><listitem><para><ulink url="https://www.man7.org/linux/man-pages/man7/epoll.7.html">Linux epoll Documentation</ulink></para>
+</listitem><listitem><para><ulink url="https://man7.org/linux/man-pages/man3/errno.3.html">Linux errno Table</ulink></para>
+</listitem></itemizedlist>
+</para>
+<para><hruler/>
+</para>
+</sect1>
+<sect1 id="index_1autotoc_md16">
+<title>Author</title>
+<para>Fábio D. Pacheco (<ulink url="mailto:pacheco.castro.fabio@gmail.com">pacheco.castro.fabio@gmail.com</ulink>)</para>
+</sect1>
+<sect1 id="index_1autotoc_md17">
+<title>License</title>
+<para><computeroutput>xcserial</computeroutput> is released under the <ulink url="https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html">GNU Lesser General Public License v2.1</ulink>. </para>
+</sect1>
+    </detaileddescription>
+    <location file="README.md"/>
+  </compounddef>
+</doxygen>

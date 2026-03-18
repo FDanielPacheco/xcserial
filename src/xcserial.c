@@ -53,8 +53,11 @@
 #include "xcserial.h"
 
 #ifndef DISABLE_LOGGING
-        #define LOG_SER(logger, err, prio, fmt, ...) \
-                LOG_ERRNO(logger, "serial", err, prio, fmt, ##__VA_ARGS__)
+        #define LOG_SER(serial, err, prio, fmt, ...) \
+                LOG_ERRNO(serial ? &(serial->logger) : 0, "serial", err, prio, fmt, ##__VA_ARGS__)
+#else
+        #define LOG_SER(serial, err, prio, fmt, ...) \
+                ((void)0)
 #endif
 
 /** 
@@ -114,13 +117,12 @@ serial_open(
         int err = 0;
         if ( !serial || !pathname || !strlen(pathname) ) {
                 err = -EINVAL;
-                LOG_SER(&serial->logger, err, LOG_ERROR, "serial_open");
                 goto cleanup;
         }
 
         if ( sizeof(serial->udev.path) < strlen(pathname) ) {
                 err = -ENAMETOOLONG;
-                LOG_SER(&serial->logger, err, LOG_ERROR, "serial_open");
+                LOG_SER(serial, err, LOG_ERROR, "serial_open");
                 goto cleanup;
         }
 
@@ -131,14 +133,14 @@ serial_open(
         serial->fd = open(pathname, O_RDWR|O_NOCTTY|O_NONBLOCK|O_CLOEXEC);
         if ( 1 > serial->fd ) {
                 err = -errno;
-                LOG_SER(&serial->logger, err, LOG_ERROR, "serial_open");
+                LOG_SER(serial, err, LOG_ERROR, "serial_open");
                 goto cleanup;
         }
         fcntl(serial->fd, F_SETFL, 0);
 
         if ( -1 == tcflush(serial->fd, TCIOFLUSH) ) {
                 err = -errno;
-                LOG_SER(&serial->logger, err, LOG_ERROR, "tcflush");
+                LOG_SER(serial, err, LOG_ERROR, "tcflush");
                 goto cleanup;
         }
         
@@ -147,18 +149,18 @@ serial_open(
         serial_default_config(&_config);
         err = serial_set_config(&_config, serial);
         if ( err ) {
-                LOG_SER(&serial->logger, err, LOG_ERROR, "serial_open");
+                LOG_SER(serial, err, LOG_ERROR, "serial_open");
                 goto cleanup;
         }
         
         err = _serial_epoll_setup(serial->fd, &serial->epoll.rx, EPOLLIN);
         if (err) {
-                LOG_SER(&serial->logger, err, LOG_ERROR, "_serial_epoll_setup");
+                LOG_SER(serial, err, LOG_ERROR, "_serial_epoll_setup");
                 goto cleanup;
         }
         err = _serial_epoll_setup(serial->fd, &serial->epoll.tx, EPOLLOUT);
         if (err) {
-                LOG_SER(&serial->logger, err, LOG_ERROR, "_serial_epoll_setup");
+                LOG_SER(serial, err, LOG_ERROR, "_serial_epoll_setup");
                 goto cleanup;
         }
 cleanup:
@@ -266,13 +268,13 @@ serial_reopen(
                 serial_set_config(&serial->cfg, &tmp);
                 serial_set_udev(&serial->udev, &tmp);
                 memcpy(serial, &tmp, sizeof(serial_t));
-                LOG_SER(&serial->logger, err, LOG_DEBUG, "success to reopen");
+                LOG_SER(serial, err, LOG_DEBUG, "success to reopen");
                 return 0;
         }
 
         udev_unref( udev );
 cleanup:
-        LOG_SER(&serial->logger, err, LOG_ERROR, "serial_reopen");
+        LOG_SER(serial, err, LOG_ERROR, "serial_reopen");
         return -1;
 }
 
@@ -396,7 +398,7 @@ serial_set_timeout(
 ) {
         if (!serial) {
                 int err = -EINVAL; 
-                LOG_SER(&serial->logger, err, LOG_ERROR, "serial_set_timeout");
+                LOG_SER(serial, err, LOG_ERROR, "serial_set_timeout");
                 return err;
         }
         serial->cfg.timeout_ms = timeout_ms;
@@ -413,18 +415,19 @@ serial_set_config(
 ) {
         int err = _serial_nvalid(serial, 0);
         if (err) {
-                LOG_SER(&serial->logger, err, LOG_ERROR, "serial_set_config");
+                LOG_SER(serial, err, LOG_ERROR, "serial_set_config");
                 return err;
         }
         if ( !config ) {
                 err = -EINVAL;
-                LOG_SER(&serial->logger, err, LOG_ERROR, "serial_set_config");
+                LOG_SER(serial, err, LOG_ERROR, "serial_set_config");
                 return err;
         }
         
         struct termios tty;
         if ( tcgetattr( serial->fd, &tty ) ) {
-                LOG_SER(&serial->logger, -errno, LOG_ERROR, "tcgetattr");
+                err = -errno;
+                LOG_SER(serial, err, LOG_ERROR, "tcgetattr");
                 goto cleanup;
         }
 
@@ -432,27 +435,27 @@ serial_set_config(
         memset(&tty.c_cc, 0, sizeof(cc_t)*NCCS);
 
         if ( (err = _serial_set_baudrate((int)config->baudrate, &tty)) ){
-                LOG_SER(&serial->logger, err, LOG_ERROR, "_serial_set_baudrate");
+                LOG_SER(serial, err, LOG_ERROR, "_serial_set_baudrate");
                 goto cleanup;
         }
         if ( (err = _serial_set_parity((int)config->parity, &tty)) ){
-                LOG_SER(&serial->logger, err, LOG_ERROR, "_serial_set_parity");
+                LOG_SER(serial, err, LOG_ERROR, "_serial_set_parity");
                 goto cleanup;
         }
         if ( (err = _serial_set_stopbits((int)config->stopbits, &tty)) ){
-                LOG_SER(&serial->logger, err, LOG_ERROR, "_serial_set_stopbits");
+                LOG_SER(serial, err, LOG_ERROR, "_serial_set_stopbits");
                 goto cleanup;
         }
         if ( (err = _serial_set_databits((int)config->databits, &tty)) ){
-                LOG_SER(&serial->logger, err, LOG_ERROR, "_serial_set_databits");
+                LOG_SER(serial, err, LOG_ERROR, "_serial_set_databits");
                 goto cleanup;
         }
         if ( (err = _serial_set_flowcontrol((int)config->flowcontrol, &tty)) ){
-                LOG_SER(&serial->logger, err, LOG_ERROR, "_serial_set_flowcontrol");
+                LOG_SER(serial, err, LOG_ERROR, "_serial_set_flowcontrol");
                 goto cleanup;
         }        
         if ( tcsetattr( serial->fd, TCSANOW, &tty ) ){
-                LOG_SER(&serial->logger, -errno, LOG_ERROR, "tcsetattr");
+                LOG_SER(serial, -errno, LOG_ERROR, "tcsetattr");
                 return -errno;
         }
         
@@ -638,29 +641,29 @@ _serial_set_generic(
 ) {
         int err = _serial_nvalid(serial, 1);
         if (err) {
-                LOG_SER(&serial->logger, err, LOG_ERROR, fname);
+                LOG_SER(serial, err, LOG_ERROR, fname);
                 return err;
         }
         if ( !set || !fname || !field ) {
                 err = -EINVAL;
-                LOG_SER(&serial->logger, err, LOG_ERROR, fname);
+                LOG_SER(serial, err, LOG_ERROR, fname);
                 return err;
         }
         
         struct termios tty;
         if ( tcgetattr(serial->fd, &tty) ) {
                 err = -errno;
-                LOG_SER(&serial->logger, err, LOG_ERROR, "tcgetattr");
+                LOG_SER(serial, err, LOG_ERROR, "tcgetattr");
                 return err;
         }
         
         if ( (err = set(val, &tty)) ) {
-                LOG_SER(&serial->logger, err, LOG_ERROR, fname);
+                LOG_SER(serial, err, LOG_ERROR, fname);
                 return err;
         }
         if ( tcsetattr(serial->fd, TCSANOW, &tty) ) {
                 err = -errno;
-                LOG_SER(&serial->logger, err, LOG_ERROR, "tcsetattr");
+                LOG_SER(serial, err, LOG_ERROR, "tcsetattr");
                 return err;
         }
         *field = val;
@@ -692,18 +695,18 @@ _serial_get_generic(
         int err = 0;
         if ( !get || !tty || !fname || !lut || !field ) {
                 err = -EINVAL;
-                LOG_SER(&serial->logger, err, LOG_ERROR, fname);
+                LOG_SER(serial, err, LOG_ERROR, fname);
                 return err;
         }
         err = _serial_nvalid(serial, 1);
         if (err) {
-                LOG_SER(&serial->logger, err, LOG_ERROR, fname);
+                LOG_SER(serial, err, LOG_ERROR, fname);
                 return err;
         }
         int val = (int) get( tty );
         if (SERIAL_INV == val) {
                 err = -EINVAL;
-                LOG_SER(&serial->logger, err, LOG_ERROR, "tcgetattr");
+                LOG_SER(serial, err, LOG_ERROR, "tcgetattr");
                 return err;
         }
         _serial_get_str4opcode(val, lut, serial->rsv.label, serial->rsv.value);
@@ -735,19 +738,19 @@ _serial_get_generic_str(
         int err_ = 0, *_err = err ? err : &err_; 
         if ( !get || !fname ) {
                 *_err = -EINVAL;
-                LOG_SER(&serial->logger, *_err, LOG_ERROR, fname);
+                LOG_SER(serial, *_err, LOG_ERROR, fname);
                 return NULL;
         }
 
         *_err = _serial_nvalid(serial, 1);
         if (*_err) {
-                LOG_SER(&serial->logger, *_err, LOG_ERROR, fname);
+                LOG_SER(serial, *_err, LOG_ERROR, fname);
                 return NULL;
         }
         struct termios tty;
         if ( tcgetattr(serial->fd, &tty) ) {
                 *_err = -errno;
-                LOG_SER(&serial->logger, *_err, LOG_ERROR, "tcgetattr");
+                LOG_SER(serial, *_err, LOG_ERROR, "tcgetattr");
                 return NULL;
         }
         *_err = get(&tty, serial);
@@ -783,14 +786,14 @@ serial_get_config(
         int err_ = 0, *_err = err ? err : &err_;
 
         *_err = _serial_nvalid(serial, 1);
-        if (err) {
-                LOG_SER(&serial->logger, *_err, LOG_ERROR, "tcgetattr");
+        if (*_err) {
+                LOG_SER(serial, *_err, LOG_ERROR, "tcgetattr");
                 return NULL;
         }
 
         struct termios tty;
         if ( tcgetattr(serial->fd, &tty) ) {
-                LOG_SER(&serial->logger, -errno, LOG_ERROR, "tcgetattr");
+                LOG_SER(serial, -errno, LOG_ERROR, "tcgetattr");
                 return NULL;
         }
 
@@ -842,7 +845,7 @@ serial_get_timeout(
 
         *_err = _serial_nvalid(serial, 1);
         if (*_err) {
-                LOG_SER(&serial->logger, *_err, LOG_ERROR, "serial_get_timeout");
+                LOG_SER(serial, *_err, LOG_ERROR, "serial_get_timeout");
                 return NULL;
         }
         (void) snprintf( serial->rsv.value, sizeof(serial->rsv.value), "timeout: %d", serial->cfg.timeout_ms);
@@ -882,9 +885,22 @@ serial_set_lines(
         return 0;
 
 cleanup:
-        LOG_SER(&serial->logger, err, LOG_ERROR, "serial_set_lines");
+        LOG_SER(serial, err, LOG_ERROR, "serial_set_lines");
         return err;
 }
+
+int 
+serial_set_line(
+        struct serial_line_state  entry, 
+        serial_t                 *serial
+) {
+        struct serial_lines table = {
+                .lines=&entry, 
+                .size=1
+        };
+        return serial_set_lines(&table, serial);
+}
+
 
 
 /** 
@@ -919,7 +935,7 @@ serial_get_lines(
         strncpy( serial->rsv.value, buf, sizeof(serial->rsv.value) );
         return serial->rsv.value;
 cleanup:
-        LOG_SER(&serial->logger, err, LOG_ERROR, "serial_get_lines");
+        LOG_SER(serial, err, LOG_ERROR, "serial_get_lines");
         return NULL;
 }
 
@@ -934,13 +950,13 @@ _serial_get_udev_values(
         
         if (!serial || !udev) {
                 err = -EINVAL;
-                LOG_SER(&serial->logger, err, LOG_ERROR, "serial_set_udev");
+                LOG_SER(serial, err, LOG_ERROR, "serial_set_udev");
                 goto cleanup;
         }
         const char *basename = strrchr(serial->udev.path, '/');
         if ( !basename ) {
                 err = -EINVAL;
-                LOG_SER(&serial->logger, err, LOG_ERROR, "strrchr");
+                LOG_SER(serial, err, LOG_ERROR, "strrchr");
                 goto cleanup;
         }
         basename++;   
@@ -948,7 +964,7 @@ _serial_get_udev_values(
         dev = udev_device_new_from_subsystem_sysname(udev, "tty", basename);
         if (!dev) {
                 err = -errno;
-                LOG_SER(&serial->logger, err, LOG_ERROR, "udev_device_new_from_subsystem_sysname");
+                LOG_SER(serial, err, LOG_ERROR, "udev_device_new_from_subsystem_sysname");
                 goto cleanup;
         }
 
@@ -987,12 +1003,12 @@ serial_set_udev(
         struct udev *udev = NULL;
         int err = 0;
         if ( (err =_serial_nvalid(serial, 1)) ) {
-                LOG_SER(&serial->logger, err, LOG_ERROR, "_serial_nvalid");
+                LOG_SER(serial, err, LOG_ERROR, "_serial_nvalid");
                 goto cleanup;
         }
         if ( !params ) {
                 err = -EINVAL;
-                LOG_SER(&serial->logger, err, LOG_ERROR, "serial_set_udev");
+                LOG_SER(serial, err, LOG_ERROR, "serial_set_udev");
                 goto cleanup;
         }
         strncpy( params->path, serial->udev.path, sizeof(serial->udev.path)); 
@@ -1001,11 +1017,11 @@ serial_set_udev(
         udev = udev_new( );
         if ( !udev ){
                 err = -errno;
-                LOG_SER(&serial->logger, err, LOG_ERROR, "udev_new");
+                LOG_SER(serial, err, LOG_ERROR, "udev_new");
                 goto cleanup;
         }
         if ( (err = _serial_get_udev_values(udev, serial)) ){
-                LOG_SER(&serial->logger, err, LOG_ERROR, "_serial_get_udev_values");
+                LOG_SER(serial, err, LOG_ERROR, "_serial_get_udev_values");
                 goto cleanup;
         }
         err = 0;
@@ -1021,8 +1037,8 @@ cleanup:
  */
 const char *
 serial_get_udev(
-        serial_t *serial,
-        int      *err
+        int      *err,
+        serial_t *serial
 ) {
         int err_ = 0, *_err = err ? err : &err_;
         if ( (*_err =_serial_nvalid(serial, 1)) ) {
@@ -1042,7 +1058,7 @@ serial_get_udev(
         }
         return serial->rsv.value;
 cleanup:
-        LOG_SER(&serial->logger, *_err, LOG_ERROR, "serial_get_udev");
+        LOG_SER(serial, *_err, LOG_ERROR, "serial_get_udev");
         return NULL;       
 }
 
@@ -1127,20 +1143,20 @@ _serial_read_epoll(
                 int remaining_ms = _serial_remaining_time(total_timeout, &start, &now);
                 if (0 >= remaining_ms) {
                         *_err = -ETIME;
-                        LOG_SER(&serial->logger, *_err, LOG_ERROR, "_serial_read");
-                        return -1;
+                        LOG_SER(serial, *_err, LOG_ERROR, "_serial_read");
+                        return (writtenbytes > 0) ? writtenbytes : 0;    
                 }
 
                 readbytes = totalbytes - writtenbytes; 
                 *_err = _serial_epoll_loop(serial->epoll.rx, remaining_ms);
                 if (*_err) {
-                        LOG_SER(&serial->logger, *_err, LOG_DEBUG, "_serial_epoll_loop");
-                        return writtenbytes;    
+                        LOG_SER(serial, *_err, LOG_DEBUG, "_serial_epoll_loop");
+                        return (writtenbytes > 0) && (-ETIME == *_err) ? writtenbytes : -1;    
                 }
                 ssize_t wrote = _serial_read( &u8_buf[writtenbytes], 1, readbytes, serial, _err);
                 if ( -1 == wrote ) {
-                        LOG_SER(&serial->logger, *_err, LOG_ERROR, "_serial_read");
-                        return -1;
+                        LOG_SER(serial, *_err, LOG_ERROR, "_serial_read");
+                        return (writtenbytes > 0) && (-ETIME == *_err) ? writtenbytes : -1;
                 }
                 writtenbytes += wrote;
         }
@@ -1161,12 +1177,12 @@ serial_read(
 ) {
         int err_ = 0, *_err = err ? err : &err_;
         if ( (*_err = _serial_nvalid(serial, 1)) ) {
-                LOG_SER(&serial->logger, *_err, LOG_ERROR, "serial_read");
+                LOG_SER(serial, *_err, LOG_ERROR, "serial_read");
                 return -1;
         }
         if ( !nmemb || !buf ) {
                 *_err = -EINVAL;
-                LOG_SER(&serial->logger, *_err, LOG_ERROR, "serial_read");
+                LOG_SER(serial, *_err, LOG_ERROR, "serial_read");
                 return -1;
         }
         ssize_t wrote = 0;
@@ -1196,12 +1212,12 @@ serial_read_delim(
         int err_ = 0, *_err = err ? err : &err_;
 
         if ( (*_err = _serial_nvalid(serial, 1)) ) {
-                LOG_SER(&serial->logger, *_err, LOG_ERROR, "serial_read_delim");
+                LOG_SER(serial, *_err, LOG_ERROR, "serial_read_delim");
                 return -1;
         }
         if (!nmemb || !buf || !nmemb_delim || !delim) {
                 *_err = -EINVAL;
-                LOG_SER(&serial->logger, *_err, LOG_ERROR, "serial_read_delim");
+                LOG_SER(serial, *_err, LOG_ERROR, "serial_read_delim");
                 return -1;
         }
 
@@ -1210,10 +1226,7 @@ serial_read_delim(
         while (writtenbytes < totalbytes) {
                 ssize_t wrote = serial_read(&u8_buf[writtenbytes], 1, nmemb_delim, timeout_ms, serial, _err);
                 if (0 >= wrote) {
-                        if (*_err == -ETIME) {
-                                return writtenbytes;
-                        }
-                        return -1;
+                        return (writtenbytes > 0) && (-ETIME == *_err) ? writtenbytes : -1;
                 }
                 ssize_t start_check = (writtenbytes < nmemb_delim) ? 0 : (writtenbytes - nmemb_delim + 1);
                 writtenbytes += wrote;
@@ -1274,14 +1287,14 @@ _serial_write_epoll(
         int timeout_ms_val = !timeout_ms ? serial->cfg.timeout_ms : timeout_ms;
         *_err = _serial_epoll_loop(serial->epoll.tx, timeout_ms_val);
         if (*_err) {
-                LOG_SER(&serial->logger, *_err, LOG_DEBUG, "_serial_epoll_loop");
+                LOG_SER(serial, *_err, LOG_DEBUG, "_serial_epoll_loop");
                 return -1;    
         }
 
         
         ssize_t wrote = _serial_write(buf, size, nmemb, serial, _err);
         if ( -1 == wrote ) {
-                LOG_SER(&serial->logger, *_err, LOG_ERROR, "_serial_write");
+                LOG_SER(serial, *_err, LOG_ERROR, "_serial_write");
                 return -1;
         }
         return wrote;       
@@ -1303,12 +1316,12 @@ serial_write(
         int err_ = 0, *_err = err ? err : &err_;
         
         if ( (*_err = _serial_nvalid(serial, 1)) ) {
-                LOG_SER(&serial->logger, *_err, LOG_ERROR, "serial_write");
+                LOG_SER(serial, *_err, LOG_ERROR, "serial_write");
                 return -1;
         }
         if ( !nmemb || !buf ) {
                 *_err = -EINVAL;
-                LOG_SER(&serial->logger, *_err, LOG_ERROR, "serial_write");
+                LOG_SER(serial, *_err, LOG_ERROR, "serial_write");
                 return -1;
         }
         ssize_t wrote = 0;
@@ -1334,12 +1347,12 @@ serial_writef(
         ssize_t ret = -1;
         
         if ( (*_err = _serial_nvalid(serial, 1)) ) {
-                LOG_SER(&serial->logger, *_err, LOG_ERROR, "serial_writef");
+                LOG_SER(serial, *_err, LOG_ERROR, "serial_writef");
                 goto cleanup;
         }
         if ( !fmt ) {
                 *_err = -EINVAL;
-                LOG_SER(&serial->logger, *_err, LOG_ERROR, "serial_writef");
+                LOG_SER(serial, *_err, LOG_ERROR, "serial_writef");
                 goto cleanup;
         }
 
@@ -1351,12 +1364,12 @@ serial_writef(
 
         if ( 0 > len ) {
                 *_err = -EINVAL;
-                LOG_SER(&serial->logger, *_err, LOG_ERROR, "serial_writef");
+                LOG_SER(serial, *_err, LOG_ERROR, "serial_writef");
                 goto cleanup;
         }
         if ( (int) sizeof(buf) <= len ) {
                 *_err = -EOVERFLOW;
-                LOG_SER(&serial->logger, *_err, LOG_ERROR, "serial_writef");
+                LOG_SER(serial, *_err, LOG_ERROR, "serial_writef");
                 goto cleanup;
         }
 
