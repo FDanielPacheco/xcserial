@@ -88,14 +88,14 @@ $(PC_FILE):
 
 # --- Release/Cross-Compile Target ---
 # Usage: make release ARCH=arm
-release: cleanall all
+release: clean all
 	@mkdir -p $(OUT_DIR)
 	@cp $(INC_DIR)/*.h $(OUT_DIR)/
 	@cp $(LIB_A) $(LIB_SO) $(PC_FILE) $(OUT_DIR)/
 	@cp -r $(DOC_DIR)/html $(OUT_DIR)/
 	@cp -r $(DOC_DIR)/man $(OUT_DIR)/
-	@zip -r $(OUT_DIR).zip $(OUT_DIR) >> /dev/null
-	@echo "  GEN     $(OUT_DIR).zip"
+	@zip -r $(OUT_DIR)_lib$(NAME).$(MAJOR).zip $(OUT_DIR) >> /dev/null
+	@echo "  GEN     $(OUT_DIR)_lib$(NAME).$(MAJOR).zip"
 
 # --- Documentation with doxygen ---
 docs:
