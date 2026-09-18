@@ -111,7 +111,7 @@ docs:
 	@mkdir -p $(DOC_DIR)/man
 	@echo "  GEN     $(DOC_DIR)/man"
 	@doxy2man --novalidate --nowarn --nosummary --pkg "$(NAME) man page" $(DOC_DIR)/xml/xcserial_8h.xml -o $(DOC_DIR)/man
-
+		
 # --- Dynamic Test Suite ---
 .PRECIOUS: $(BUILD_DIR)/test/%
 $(BUILD_DIR)/test/%: test/%.c $(LIB_SO)

@@ -1,9 +1,10 @@
 /**
  * @file      stblog.h
  * 
- * @version   0.1.0
+ * @version   0.2.0
  *
  * @date      16-03-2026
+ * @date      06-09-2026
  *  
  * @author    Fábio D. Pacheco, 
  * @email     fabio.d.pacheco@inesctec.pt or pacheco.castro.fabio@gmail.com
@@ -33,8 +34,10 @@
 #define STBLOG_H
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <errno.h>
 
 enum stblog_level {
         LOG_DEBUG = 0,
@@ -72,6 +75,14 @@ stblog_emit(
 );
 
 static inline void
+stblog_hexdump(
+        struct stblog_logger *lg,
+        struct stblog_report  report,
+        const void           *buf,
+        size_t                nelem 
+);
+
+static inline void
 stblog_default(
         struct stblog_report  report,
         const char           *msg
@@ -89,7 +100,7 @@ stblog_default(
         if ( report.prio < 0 || report.prio > LOG_FATAL ) {
                 report.prio = LOG_DEBUG;
         }
-        char *errmsg = !report.err_code ? "" : strerror(-report.err_code);
+        const char *errmsg = !report.err_code ? "" : strerror(-report.err_code);
         fprintf(
                 stderr,
                 "%s[%s][%s] (%s:%d) %s:%s %s\n",
@@ -139,5 +150,38 @@ stblog_emit(
         #define LOG_ERRNO(logger, label, err, prio, fmt, ...) \
                 ((void)0)
 #endif
+
+/** 
+@brief External call to hexdump to dump information in pretty hexadecimal 
+ */
+static inline void
+stblog_hexdump(
+        struct stblog_logger *lg,
+        struct stblog_report  report,
+        const void           *buf,
+        size_t                bytes 
+) {
+        FILE *fp = popen("hexdump -C", "w");
+        if (!fp) {
+                LOG_ERRNO(lg, report.label, -errno, report.prio, "popen|hexdump");
+                return;
+        }
+        printf("[%s]\n", report.label);
+        (void) fwrite(buf, 1, bytes, fp);
+        (void) pclose(fp);        
+}
+
+#ifndef DISABLE_LOGGING
+        #define LOG_HEXDUMP(logger, label, prio, buf, bytes)                         \
+                stblog_hexdump(                                                      \
+                        (logger),                                                    \
+                        (struct stblog_report){label, __FILE__, __LINE__, 0, prio},  \
+                        (buf), (bytes)                                                \
+                )
+#else
+        #define LOG_HEXDUMP(logger, label, prio, buf, bytes) \
+                ((void)0)
+#endif
+
 
 #endif
