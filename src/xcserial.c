@@ -54,7 +54,7 @@
 
 #ifndef DISABLE_LOGGING
         #define LOG_SER(serial, err, prio, fmt, ...) \
-                LOG_ERRNO(serial ? &(serial->logger) : 0, "serial", err, prio, fmt, ##__VA_ARGS__)
+                LOG_ERRNO(serial ? &(serial->logger) : 0, "serial", -err, prio, fmt, ##__VA_ARGS__)
 #else
         #define LOG_SER(serial, err, prio, fmt, ...) \
                 ((void)0)
